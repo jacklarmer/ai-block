@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>LocalLens WebGPU Runner</title></head>
+<body>
+<h3>LocalLens WebGPU inference runner</h3>
+<pre id="log">loading...</pre>
+<script>
+  // expose the model URL (from ?model=...) before detector.js loads
+  const qp = new URLSearchParams(location.search);
+  window.LOCALLENS_MODEL_URL = qp.get("model") || "model/detector.onnx";
+</script>
+<script src="/lib/ort.all.min.js"></script>
+<script src="/content/detector.js"></script>
+<script>
+  const logEl = document.getElementById("log");
+  async function runDetect(img) {
+    // fetch to blob so canvas is not tainted (avoids CORS taint on page load)
+    const resp = await fetch(img.src);
+    const blob = await resp.blob();
+    const bmp = await createImageBitmap(blob);
+    const r = await LocalLensDetector.detect(bmp, {});
+    bmp.close();
+    return r;
+  }
+  window.runDetect = runDetect;
+  console.log("runner ready, model =", window.LOCALLENS_MODEL_URL);
+  logEl.textContent = "runner ready";
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "locallens",
+  "version": "1.0.0",
+  "description": "LocalLens — private, in-browser AI image detector Chrome MV3 extension (WebGPU/WASM). No cloud, no server, no uploads.",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "test:web": "node test/run_web_test.js model/detector.onnx samples"
+  },
+  "dependencies": {
+    "onnxruntime-web": "^1.27.0"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^25.6.0"
+  }
+}

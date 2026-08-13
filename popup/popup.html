@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LocalLens</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="card">
+      <header>
+        <h1>🔍 LocalLens</h1>
+        <span class="sub">On-device AI image detector</span>
+      </header>
+
+      <section class="status-row">
+        <div id="engineState" class="pill">initializing…</div>
+        <div id="runtimeInfo" class="runtime">—</div>
+      </section>
+
+      <section class="controls">
+        <label class="switch-row">
+          <span>Enabled on pages</span>
+          <input type="checkbox" id="enabled" checked />
+        </label>
+
+        <label class="slider-row">
+          <span>AI confidence threshold</span>
+          <input type="range" id="threshold" min="50" max="90" step="1" value="65" />
+          <output id="thresholdVal">65%</output>
+        </label>
+      </section>
+
+      <section class="scan-section">
+        <button id="rescanBtn" class="btn">Re-scan current page</button>
+        <div id="lastScan" class="runtime">—</div>
+      </section>
+
+      <section class="stats">
+        <div class="stat"><span id="statImages">0</span><label>imgs seen</label></div>
+        <div class="stat"><span id="statAI">0</span><label>AI</label></div>
+        <div class="stat"><span id="statReal">0</span><label>real</label></div>
+      </section>
+
+      <footer>
+        <span>100% private · runs via WebGPU · nothing leaves your device</span>
+      </footer>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>

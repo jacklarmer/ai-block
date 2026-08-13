@@ -1,0 +1,15 @@
+# Dev-only test harness dependencies (not part of the shipped extension)
+node_modules/
+
+# macOS
+.DS_Store
+
+# Test/diagnostic scratch
+*.log
+diag*.js
+elt*.js
+e*.js
+t[0-9].js
+
+# Model intermediates (reference .onnx variants kept via evaluation/export_onnx.py)
+model/detector_*.onnx
