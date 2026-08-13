@@ -58,20 +58,20 @@
     const conf = Math.round(result.label === "AI-generated" ? result.fake * 100 : result.real * 100);
     const color = result.label === "AI-generated" ? "rgba(214,40,40,0.92)" : "rgba(34,139,51,0.92)";
 
-    // Wrap the img in a positioned container so we can overlay a corner tag.
+    // Wrap the img in a DEDICATED container we fully control. We must NOT touch
+    // the existing parent's style/layout — host pages (e.g. X/Twitter) put
+    // critical inline styles (width, aspect-ratio, display) on the image's real
+    // parent; mutating them collapses the layout and makes images vanish.
     let wrap = img.closest("[data-locallens-wrap]");
     if (!wrap) {
-      if (img.parentElement) {
-        wrap = img.parentElement;
-      } else {
-        return;
-      }
+      wrap = document.createElement("span");
+      wrap.className = "locallens-badge-wrap";
+      wrap.style.cssText = "position:relative;display:inline-block;line-height:0;";
+      wrap.setAttribute("data-locallens-wrap", "1");
+      // Insert as the img's new parent without disturbing the rest of the tree.
+      img.parentNode.insertBefore(wrap, img);
+      wrap.appendChild(img);
     }
-    let style = "position:relative;display:inline-block;";
-    try {
-      wrap.setAttribute("style", (wrap.getAttribute("style") || "") + style);
-    } catch (e) {}
-    wrap.setAttribute("data-locallens-wrap", "1");
 
     const badge = document.createElement("div");
     badge.className = "locallens-badge";
@@ -116,7 +116,9 @@
     }
 
     while (enabled) {
-      collectImages().forEach((im) => enqueue(im));
+      const newImgs = collectImages();
+      dbg.collected += newImgs.length;
+      newImgs.forEach((im) => enqueue(im));
       const img = queue.shift();
       if (!img) break;
 
@@ -136,6 +138,7 @@
               const blob = await resp.blob();
               loaded = await createImageBitmap(blob);
               img.__locallensBmp = loaded;
+              dbg.fetched++;
             }
           } catch (e) {
             loaded = null;
@@ -145,26 +148,31 @@
           try {
             loaded = await createImageBitmap(img);
             img.__locallensBmp = loaded;
+            dbg.fetched++;
           } catch (e) {
             loaded = img;
           }
         }
         if (!loaded) {
           scanned.add(img);
+          dbg.skipped++;
           continue;
         }
         const result = await LocalLensDetector.detect(loaded, {});
+        dbg.detected++;
         if (result.label === "AI-generated" && result.fake < threshold) {
           // below threshold -> treat as real/unflagged but still show soft badge
           result.label = "Real";
         }
         drawBadge(img, result);
+        dbg.badged++;
         if (img.__locallensBmp) {
           img.__locallensBmp.close();
           img.__locallensBmp = null;
         }
       } catch (e) {
         // skip images we cannot decode (e.g. CORS-tainted)
+        dbg.errors.push(String(e && e.message));
         scanned.add(img);
       } finally {
         scanned.add(img);
@@ -187,6 +195,15 @@
     mo = new MutationObserver(() => schedule());
     mo.observe(document.documentElement, { childList: true, subtree: true });
   }
+
+  // ---------- diagnostic counters (visible via console) ----------
+  const dbg = { collected: 0, fetched: 0, detected: 0, badged: 0, skipped: 0, errors: [] };
+  setInterval(() => {
+    if (dbg.collected || dbg.detected || dbg.errors.length) {
+      console.log("[LocalLens] dbg", JSON.stringify(dbg));
+      if (dbg.errors.length > 3) dbg.errors.length = 3; // avoid unbounded growth
+    }
+  }, 10000);
 
   // ---------- messaging ----------
   try {
