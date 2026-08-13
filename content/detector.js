@@ -45,6 +45,12 @@
         throw new Error("onnxruntime-web not loaded");
       }
       ort.env.wasm.wasmPaths = WASM_DIRS;
+      // Content scripts on ordinary pages (e.g. twitter.com) do NOT get COOP/COEP
+      // cross-origin-isolation headers, so SharedArrayBuffer is unavailable and the
+      // threaded wasm build cannot initialize. Force single-thread execution — a
+      // fully in-browser, CPU-only path that needs no SharedArrayBuffer and works
+      // on any page. (Per-image cost stays tiny.)
+      ort.env.wasm.numThreads = 1;
     }
     return ort;
   }

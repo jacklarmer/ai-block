@@ -121,22 +121,35 @@
       if (!img) break;
 
       try {
-        // Load the image pixel data respecting CORS. For cross-origin images we
-        // use the naturalWidth/Height only; canvas decode requires CORS. To stay
-        // robust we attempt a fetch+blob; fallback to drawImage (may taint only
-        // if CORS blocked — handled below).
-        let loaded = img;
-        if (img.complete && img.naturalWidth > 0) {
-          // try to decode into an ImageBitmap for speed
+        // Load the image pixel data respecting CORS. Many image hosts (e.g.
+        // Twitter's pbs.twimg.com) serve images with Access-Control-Allow-Origin,
+        // so we try to fetch the bytes and decode from a Blob — this avoids the
+        // "canvas tainted by cross-origin image" failure that would otherwise
+        // skip every social photo. Fall back to the in-DOM <img> when CORS blocks
+        // the fetch (that may taint the canvas; handled by try/catch below).
+        let loaded = null;
+        const url = img.currentSrc || img.src;
+        if (url && /^(https?:|data:)/.test(url)) {
           try {
-            const bmp = await createImageBitmap(img);
-            loaded = bmp;
-            img.__locallensBmp = bmp;
+            const resp = await fetch(url, { credentials: "omit", mode: "cors" });
+            if (resp.ok) {
+              const blob = await resp.blob();
+              loaded = await createImageBitmap(blob);
+              img.__locallensBmp = loaded;
+            }
+          } catch (e) {
+            loaded = null;
+          }
+        }
+        if (!loaded && img.complete && img.naturalWidth > 0) {
+          try {
+            loaded = await createImageBitmap(img);
+            img.__locallensBmp = loaded;
           } catch (e) {
             loaded = img;
           }
-        } else {
-          // not yet loaded; leave for next pass
+        }
+        if (!loaded) {
           scanned.add(img);
           continue;
         }

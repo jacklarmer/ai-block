@@ -34,13 +34,13 @@ const server = http.createServer((req, res) => {
   if (!p.startsWith(EXT)) { res.writeHead(403); return res.end(); }
   if (!fs.existsSync(p) || fs.statSync(p).isDirectory()) { if(url.endsWith('.wasm')) console.log("[404]", url, "->", p); res.writeHead(404); return res.end(); }
   const ext = path.extname(p);
-  // Cross-origin isolation headers: the threaded wasm build requires
-  // SharedArrayBuffer. Without these, onnxruntime-web's initWasm() fails.
+  // NOTE: We deliberately do NOT send COOP/COEP here. Real pages (twitter.com)
+  // don't have cross-origin-isolation headers, so this reproduces the actual
+  // content-script environment and proves the single-threaded wasm path works
+  // without SharedArrayBuffer.
   res.writeHead(200, {
     "Content-Type": MIME[ext] || "application/octet-stream",
     "Access-Control-Allow-Origin": "*",
-    "Cross-Origin-Opener-Policy": "same-origin",
-    "Cross-Origin-Embedder-Policy": "require-corp",
   });
   fs.createReadStream(p).pipe(res);
 });
