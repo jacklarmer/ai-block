@@ -9,6 +9,11 @@
   // safe, high-recall point that catches ~82% of unseen-generator AI images
   // versus ~78% at the old 0.65 default. User can tune via the popup slider.
   const MIN_IMG_AREA = 48 * 48; // ignore tiny icons / trackers
+  // Skip SMALL images entirely — profile pictures, avatars, icons, tiny
+  // thumbnails. We judge "small" by RENDERED (on-screen) size, because an
+  // avatar is small even if its source file is 400x400. Real photos worth
+  // classifying are almost always >= ~72px on screen in both dimensions.
+  const MIN_RENDERED = 72;
   const debounceMs = 250;
 
   let enabled = true;
@@ -32,6 +37,21 @@
     }
   }
 
+  // ---------- size filtering ----------
+  // True if the image is too small (on screen) to be worth flagging. Uses the
+  // RENDERED box so avatars/icons stay clean even when their source file is big;
+  // falls back to natural size for images not yet laid out (lazy / offscreen).
+  function isTooSmall(img) {
+    const r = img.getBoundingClientRect();
+    let w = r && r.width, h = r && r.height;
+    if (!w || !h) { w = img.naturalWidth || img.width || 0; h = img.naturalHeight || img.height || 0; }
+    // small in BOTH dimensions -> an avatar/icon/thumbnail; skip.
+    if (w > 0 && h > 0 && w < MIN_RENDERED && h < MIN_RENDERED) return true;
+    // intrinsic tiny image (e.g. a real 32x32 favicon)
+    if ((img.naturalWidth || 0) * (img.naturalHeight || 0) < MIN_IMG_AREA) return true;
+    return false;
+  }
+
   // ---------- image harvesting ----------
   function collectImages() {
     const out = [];
@@ -40,13 +60,7 @@
       if (scanned.has(img)) continue;
       if (!img.complete && !img.src) continue;
       if (!img.src || img.src.startsWith("data:image/svg")) continue;
-      // natural size check
-      const w = img.naturalWidth || img.width || 0;
-      const h = img.naturalHeight || img.height || 0;
-      if (w * h < MIN_IMG_AREA) {
-        scanned.add(img);
-        continue;
-      }
+      if (isTooSmall(img)) { scanned.add(img); continue; }
       // already has a badge or is our own badge
       if (img.dataset.locallens !== undefined) continue;
       out.push(img);
@@ -61,9 +75,7 @@
         for (const img of root.querySelectorAll("img")) {
           if (scanned.has(img)) continue;
           if (!img.src || img.src.startsWith("data:image/svg")) continue;
-          const w = img.naturalWidth || img.width || 0;
-          const h = img.naturalHeight || img.height || 0;
-          if (w * h < MIN_IMG_AREA) { scanned.add(img); continue; }
+          if (isTooSmall(img)) { scanned.add(img); continue; }
           if (img.dataset.locallens !== undefined) continue;
           out.push(img);
         }
