@@ -20,8 +20,8 @@ extension is fully offline.
 
 Every image is classified by a learned model that was trained on a diverse
 multi-generator corpus (SDXL, Stable Diffusion, Midjourney, BigGAN, ADM, glide,
-wukong, VQDM, FLUX, Mobius + real web photos) so it generalizes to unseen
-generators rather than memorizing one.
+wukong, VQDM, FLUX, **DALL·E 3**, Mobius + real web photos) so it generalizes to
+unseen generators rather than memorizing one.
 
 ## Requirements
 
@@ -56,17 +56,26 @@ decision agreement to ~55%, so fp16 is the shipping artifact
 
 ## Metrics
 
-Balanced accuracy on **held-out generalization** — a completely unseen generator
-(Mobius) and unseen real photos (AFHQ faces) that were excluded from training:
+Balanced accuracy on **held-out generalization** — generators and real photos
+excluded from training. The key real-world case is **DALL·E 3**, the dominant
+source of "AI-generated images" on Google Images, which the v3 model caught only
+~30% of. v4 fine-tunes on a DALL·E 3 slice and now catches **~97%** of unseen
+DALL·E 3 while *also* improving unseen-generator generalization and keeping real
+false-positives at ~0:
 
-| model                    | balanced acc (all) | balanced acc @65% | coverage |
-|--------------------------|--------------------|-------------------|----------|
-| v3 (shipped)             | 0.9116             | **0.9208**        | 96.7%    |
+| model | DALL·E 3 recall | Mobius (unseen gen) recall | real-FP | mixed bacc @50% |
+|-------|-----------------|----------------------------|---------|-----------------|
+| v3    | 0.30            | 0.83                       | 0.001   | 0.888           |
+| **v4 (shipped)** | **0.97** | **0.95**            | **0.000**| **0.975**       |
+
+`mixed` = 2,000 unseen Mobius + 200 unseen DALL·E 3 fakes vs 2,000 unseen AFHQ
+real photos. All numbers above are from the shipped **fp16 ONNX** (the exact
+artifact that runs in the browser), reproduced by `evaluation/`.
 
 The benchmark bar is **75% balanced accuracy at a 65% confidence threshold**.
-LocalLens ships at **~92%** on the held-out generalization set — well clear of
-the bar and of the previous best public claim (83.3% on 31 images, per-image
-scoring). Reproduction harness in `evaluation/`; per-image WebGPU test in `test/`.
+LocalLens ships well clear of the bar and of the previous best public claim
+(83.3% on 31 images, per-image scoring). Reproduction harness in `evaluation/`;
+per-image WebGPU test in `test/`.
 
 > **Single deterministic center-crop (no TTA).** We measured that a 5-crop x
 > 2-flip test-time augmentation *hurts* balanced accuracy on the held-out set

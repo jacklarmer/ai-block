@@ -1,7 +1,9 @@
 # Model artifacts
 
-`detector.onnx` is the **shipped** model — EfficientNet-B0 fine-tuned on a
-multi-generator real-vs-AI corpus and exported to ONNX in **fp16** (~8 MB).
+`detector.onnx` is the **shipped** model — **v4**, an EfficientNet-B0 fine-tuned
+on a multi-generator real-vs-AI corpus **including a DALL·E 3 slice** (the
+dominant source of Google "AI-generated image" results), exported to ONNX in
+**fp16** (~8 MB).
 
 ## Files
 
@@ -22,7 +24,9 @@ execution provider, and halves the download.
 ## Re-exporting
 
 ```
-python evaluation/export_onnx.py --ckpt run_v3/best.pt --out model/detector.onnx
+# v4 (current shipped): fine-tune then export
+python evaluation/train_v4.py --root data_v4/train --ckpt run_v3/best.pt --out run_v4 --epochs 8
+python evaluation/export_onnx.py --ckpt run_v4/best.pt --out model/detector.onnx
 ```
 
 Input contract: a raw RGB image, center-cropped to 256×256, normalized by
