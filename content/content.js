@@ -51,6 +51,24 @@
       if (img.dataset.locallens !== undefined) continue;
       out.push(img);
     }
+    // Also scan images inside OPEN shadow roots (some SPAs render their image
+    // galleries inside shadow DOM, e.g. certain news/media embeds).
+    try {
+      const hosts = document.querySelectorAll("*");
+      for (const host of hosts) {
+        const root = host.shadowRoot;
+        if (!root) continue;
+        for (const img of root.querySelectorAll("img")) {
+          if (scanned.has(img)) continue;
+          if (!img.src || img.src.startsWith("data:image/svg")) continue;
+          const w = img.naturalWidth || img.width || 0;
+          const h = img.naturalHeight || img.height || 0;
+          if (w * h < MIN_IMG_AREA) { scanned.add(img); continue; }
+          if (img.dataset.locallens !== undefined) continue;
+          out.push(img);
+        }
+      }
+    } catch (e) {}
     return out;
   }
 
