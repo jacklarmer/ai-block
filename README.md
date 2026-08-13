@@ -25,7 +25,9 @@ generators rather than memorizing one.
 
 ## Requirements
 
-- Chrome 113+ (WebGPU). Older browsers fall back to the WASM execution provider.
+- Chrome 113+ (WebGPU). Older browsers / pages without cross-origin isolation fall
+  back to the single-threaded WASM execution provider — always works, no
+  SharedArrayBuffer needed.
 - The `storage`, `activeTab`, `scripting` permissions (used for settings &
   on-demand scanning only — nothing leaves the device).
 
@@ -76,6 +78,12 @@ the detector in a browser during development** — it is not part of the shipped
 extension. The extension itself is a pure static MV3 package with no localhost
 server, no backend, and no network calls beyond the initial bundled-model load,
 fully satisfying the "no local server / no cloud inference" rule.
+
+> **Works on real pages (e.g. x.com).** The detector forces single-threaded WASM
+> (`numThreads=1`), which initializes without the COOP/COEP cross-origin
+> isolation that ordinary pages don't provide, and it decodes cross-origin
+> images via `fetch`→`Blob` (honoring `host_permissions`), so photos on social
+> sites aren't skipped as canvas-tainted. Inference itself always stays local.
 
 ## License
 
