@@ -56,6 +56,13 @@ els.threshold.addEventListener("input", () => {
   const v = parseInt(els.threshold.value, 10) / 100;
   els.thresholdVal.textContent = els.threshold.value + "%";
   chrome.storage.local.set({ locallens_threshold: v });
+  // push the new threshold to the active page immediately so it takes effect
+  // without a reload
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs[0] && tabs[0].id) {
+      chrome.tabs.sendMessage(tabs[0].id, { type: "locallens:threshold", value: v }).catch(() => {});
+    }
+  });
 });
 
 els.rescan.addEventListener("click", () => {
