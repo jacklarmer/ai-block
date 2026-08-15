@@ -25,6 +25,10 @@
   let badgeStyle = {};
   let periodicTimer = null;
   const PERIOD_MS = 1200; // paced re-check so scroll-lazy images are never missed
+  // Session-scoped URL -> result cache: avoids re-running the model on images
+  // that reappear (new <img> node, same URL — common in scroll/SPA layouts).
+  const resultCache = new Map();
+  const cacheUrl = (img) => (img.currentSrc || img.src || "").split("#")[0];
 
   // ---------- settings ----------
   function loadSettings() {
@@ -93,6 +97,8 @@
     const label = result.label;
     const conf = Math.round(result.label === "AI-generated" ? result.fake * 100 : result.real * 100);
     const color = result.label === "AI-generated" ? "rgba(214,40,40,0.92)" : "rgba(34,139,51,0.92)";
+    // tooltip so a hover reveals the exact confidence (nice on desktop)
+    const pct = result.label === "AI-generated" ? (result.fake * 100).toFixed(1) : (result.real * 100).toFixed(1);
 
     // Wrap the img in a DEDICATED container we fully control. We must NOT touch
     // the existing parent's style/layout — host pages (e.g. X/Twitter) put
@@ -100,6 +106,7 @@
     // parent; mutating them collapses the layout and makes images vanish.
     let wrap = img.closest("[data-locallens-wrap]");
     if (!wrap) {
+      if (!img.parentNode) return; // detached image — skip badge
       wrap = document.createElement("span");
       wrap.className = "locallens-badge-wrap";
       wrap.style.cssText = "position:relative;display:inline-block;line-height:0;";
@@ -112,6 +119,7 @@
     const badge = document.createElement("div");
     badge.className = "locallens-badge";
     badge.textContent = `${label} · ${conf}%`;
+    badge.title = `${result.kind === "cached" ? "cached · " : ""}${label} confidence ${pct}% (fake=${(result.fake*100).toFixed(1)}%)`;
     badge.style.cssText = [
       "position:absolute",
       "top:4px",
@@ -177,6 +185,17 @@
         // the fetch (that may taint the canvas; handled by try/catch below).
         let loaded = null;
         const url = img.currentSrc || img.src;
+        // Serve a cached verdict instantly if we already classified this URL.
+        const ckey = cacheUrl(img);
+        if (ckey && resultCache.has(ckey)) {
+          const cached = Object.assign({}, resultCache.get(ckey), { kind: "cached" });
+          // re-apply the (possibly live-adjusted) threshold
+          if (cached.fake != null && cached.fake < threshold) cached.label = "Real";
+          drawBadge(img, cached);
+          dbg.cached++;
+          scanned.add(img);
+          continue;
+        }
         if (url && /^(https?:|data:)/.test(url)) {
           try {
             const resp = await fetch(url, { credentials: "omit", mode: "cors" });
@@ -212,6 +231,7 @@
         }
         drawBadge(img, result);
         dbg.badged++;
+        try { if (ckey) resultCache.set(ckey, { fake: result.fake, real: result.real, label: result.label }); } catch (e) {}
         if (img.__locallensBmp) {
           img.__locallensBmp.close();
           img.__locallensBmp = null;
@@ -295,7 +315,7 @@
   }
 
   // ---------- diagnostic counters (visible via console) ----------
-  const dbg = { collected: 0, fetched: 0, detected: 0, badged: 0, skipped: 0, errors: [] };
+  const dbg = { collected: 0, fetched: 0, detected: 0, badged: 0, cached: 0, skipped: 0, errors: [] };
   setInterval(() => {
     if (dbg.collected || dbg.detected || dbg.errors.length) {
       console.log("[LocalLens] dbg", JSON.stringify(dbg));
