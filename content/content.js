@@ -23,6 +23,8 @@
   let running = false;
   let dirty = false; // set by observer/scroll even while the loop is running
   let badgeStyle = {};
+  let periodicTimer = null;
+  const PERIOD_MS = 1200; // paced re-check so scroll-lazy images are never missed
 
   // ---------- settings ----------
   function loadSettings() {
@@ -266,6 +268,21 @@
 
   // ---------- MutationObserver for lazy content ----------
   let mo = null;
+  // Paced re-check: guarantees newly lazy-loaded (scroll) images get detected
+  // even if the scroll/MutationObserver signal races with the processing loop.
+  // schedule() is cheap & idempotent (collectImages dedups via `scanned`), so
+  // this is safe to run periodically while enabled. When no new images arrive,
+  // the loop drains and rests; the timer simply nudges it to re-collect.
+  function startPeriodic() {
+    if (periodicTimer) return;
+    periodicTimer = setInterval(() => {
+      if (!enabled) return;
+      // Only wake the loop when there is genuinely new (unscanned) work —
+      // collectImages is cheap and dedups via `scanned`. This keeps the timer
+      // from spuriously marking `dirty` and pinning the processing loop.
+      if (collectImages().length > 0) schedule();
+    }, PERIOD_MS);
+  }
   function startObserver() {
     if (mo) return;
     mo = new MutationObserver(() => schedule());
@@ -274,6 +291,7 @@
     // childList mutation we can rely on (or batch them). A passive scroll
     // listener guarantees scrolling surfaces new images.
     window.addEventListener("scroll", () => schedule(), { passive: true, capture: true });
+    startPeriodic();
   }
 
   // ---------- diagnostic counters (visible via console) ----------
