@@ -21,6 +21,7 @@
   let scanned = new WeakSet();
   let queue = [];
   let running = false;
+  let dirty = false; // set by observer/scroll even while the loop is running
   let badgeStyle = {};
 
   // ---------- settings ----------
@@ -133,7 +134,8 @@
 
   // ---------- processing loop (serialized) ----------
   function schedule() {
-    if (running) return;
+    dirty = true; // always mark pending work, even if a loop is mid-run
+    if (running) return; // the running loop re-checks `dirty` each pass
     running = true;
     process();
   }
@@ -149,11 +151,20 @@
     }
 
     while (enabled) {
+      // Always mark loop exit as clean unless something new arrives mid-pass;
+      // re-collect every iteration so freshly lazy-loaded (scroll) images are
+      // picked up, even if the MutationObserver call landed while we were busy.
+      dirty = false;
       const newImgs = collectImages();
       dbg.collected += newImgs.length;
       newImgs.forEach((im) => enqueue(im));
       const img = queue.shift();
-      if (!img) break;
+      if (!img) {
+        // Dirty means a lazy image likely just appeared/loaded -> keep looping
+        // so it gets collected on the next pass instead of silently dropping.
+        if (dirty) { await new Promise((r) => setTimeout(r, 120)); continue; }
+        break;
+      }
 
       try {
         // Load the image pixel data respecting CORS. Many image hosts (e.g.
@@ -213,6 +224,38 @@
       // yield to avoid blocking
       await new Promise((r) => setTimeout(r, 0));
     }
+    // ----- trailing catch-up -----
+    // Some lazy-loading sites insert the <img> before its `src` is set, so an
+    // image can be present-but-not-ready at collect time. Give those a beat to
+    // populate, then do one final collect so nothing is left undetected after
+    // the loop exits (e.g. the tail of a Google Images scroll).
+    await new Promise((r) => setTimeout(r, 400));
+    if (enabled) {
+      dirty = false;
+      const late = collectImages();
+      if (late.length) {
+        dbg.collected += late.length;
+        late.forEach((im) => enqueue(im));
+        while (enabled) {
+          const im = queue.shift();
+          if (!im) break;
+          try {
+            let loaded = null;
+            if (im.complete && im.naturalWidth > 0) {
+              try { loaded = await createImageBitmap(im); } catch (e) { loaded = im; }
+            }
+            if (!loaded) { scanned.add(im); continue; }
+            const res = await LocalLensDetector.detect(loaded, {});
+            dbg.detected++;
+            if (res.label === "AI-generated" && res.fake < threshold) res.label = "Real";
+            drawBadge(im, res);
+            if (loaded && loaded.close) loaded.close();
+          } catch (e) { dbg.errors.push(String(e && e.message)); scanned.add(im); }
+          finally { scanned.add(im); }
+          await new Promise((r) => setTimeout(r, 0));
+        }
+      }
+    }
     running = false;
   }
 
@@ -227,6 +270,10 @@
     if (mo) return;
     mo = new MutationObserver(() => schedule());
     mo.observe(document.documentElement, { childList: true, subtree: true });
+    // Belt-and-suspenders: some lazy-loaders swap images on scroll without a
+    // childList mutation we can rely on (or batch them). A passive scroll
+    // listener guarantees scrolling surfaces new images.
+    window.addEventListener("scroll", () => schedule(), { passive: true, capture: true });
   }
 
   // ---------- diagnostic counters (visible via console) ----------
