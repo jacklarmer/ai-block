@@ -1,11 +1,17 @@
 # Model artifacts
 
-`detector.onnx` is the **shipped** model — **v6**, an EfficientNet-B0 fine-tuned
-on a maximum-breadth corpus spanning **7 diverse generators** (Ideogram, Aura
-(Stability), Imagine (Meta), Leonardo/StableCog, Midjourney (JourneyDB broad
-set), **DALL·E 3** (dominant Google "AI-generated" source)) **plus a broad
-real-photography class** (diverse COCO editorial photos) that cuts real-photo
-false-positives ~8×. Exported to ONNX in **fp16** (~8 MB).
+`detector.onnx` is the **shipped** model — **v7**, an EfficientNet-B0 fine-tuned
+on a maximum-breadth, low-false-positive corpus:
+- **7 diverse AI generators** (Ideogram, Aura (Stability), Imagine (Meta),
+  Leonardo/StableCog, Midjourney (JourneyDB broad set), **DALL·E 3**) plus the
+  original multi-generator pool,
+- **a broad real-photography class** (diverse COCO editorial photos) — real
+  photo false-positives → **~0%**,
+- **a real human-artwork class** (12k WikiArt paintings/illustrations/plates) —
+  real art false-positives **47.5% → ~2%** (real art/illustrations are what made
+  Wikipedia pages look over-flagged).
+
+Exported to ONNX in **fp16** (~8 MB).
 
 ## Files
 
@@ -26,11 +32,12 @@ execution provider, and halves the download.
 ## Re-exporting
 
 ```
-# v6 (current shipped): real-photo class, fine-tune, export
+# v7 (current shipped): real-art class + real-photo class, fine-tune, export
 python evaluation/gather_coco.py <coco_real_dir> 25000
-python evaluation/build_v6.py <coco_real_dir> 200 3
-python evaluation/train_v4.py --root data_v6/train --ckpt run_v5/best.pt --out run_v6 --epochs 8
-python evaluation/export_onnx.py --ckpt run_v6/best.pt --out model/detector.onnx
+python evaluation/gather_realart.py <real_art_dir> 12000
+python evaluation/build_v7.py <real_art_dir> 200 3 <coco_real_dir> 200
+python evaluation/train_v4.py --root data_v7/train --ckpt run_v6/best.pt --out run_v7 --epochs 8
+python evaluation/export_onnx.py --ckpt run_v7/best.pt --out model/detector.onnx
 ```
 
 Input contract: a raw RGB image, center-cropped to 256×256, normalized by

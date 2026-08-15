@@ -60,24 +60,28 @@ Balanced accuracy on **held-out generalization** — generators and real photos
 excluded from training. Each new generator batch holds out ~200 unseen images
 per source so the improvement is measured per generator, not hand-waved.
 
-**v6 (shipped)** adds a broad **real-photography** class (diverse COCO editorial
-photos) so genuine photographs stop being false-flagged — the problem real
-sites like Wikipedia showed. Held-out balanced accuracy @65% on unseen slices:
+**v7 (shipped)** adds a **real human-artwork class** (12k WikiArt paintings,
+illustrations, historic plates) — the class that was most often false-flagged
+(real art/illustrations look "clean" like AI). Held-out balanced accuracy @65%
+on unseen slices:[truncated]
 
 | class (unseen)             | bacc @65% |
 |----------------------------|-----------|
-| Ideogram                   | 0.987     |
-| Aura (Stability)           | 0.995     |
-| Imagine (Meta)             | 0.980     |
-| Leonardo / StableCog       | 0.987     |
-| Midjourney                 | 0.977     |
-| DALL·E 3                   | 0.987     |
-| Mobius (ever-unseen)       | 0.981     |
-| **Real photos flagged (FP)** | **1.5%** (was 12.5% in v5) |
+| Ideogram                   | 0.976     |
+| Aura (Stability)           | 0.994     |
+| Imagine (Meta)             | 0.981     |
+| Leonardo / StableCog       | 0.986     |
+| Midjourney                 | 0.963     |
+| DALL·E 3                   | 0.989     |
+| Mobius (ever-unseen)       | 0.985     |
+| **Real photos flagged (FP)** | **0.0%** |
+| **Real artwork flagged (FP)** | **2.0%** (was 47.5% in v6) |
 
-AI-generator recall stays at **98–100%** while real-photo false-positives drop
-~8× (12.5% → **1.5%** at the default 0.5 threshold) — so Wikipedia/editorial
-photography is no longer wrongly flagged.
+AI-generator recall stays at **96–99%** across all generators while real false
+positives drop to near zero — real **photographs** at **0%** and, the big one,
+real **artwork/illustrations** at **~2%** (was **47.5%** in v6; those are what
+made Wikipedia pages look over-flagged). The v7 model teaches the detector that
+"polished/artistic/clean image" does NOT mean AI-generated.
 
 The benchmark bar is **75% balanced accuracy at a 65% confidence threshold**.
 LocalLens ships well clear of the bar and of the previous best public claim
