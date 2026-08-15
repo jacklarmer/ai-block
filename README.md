@@ -57,20 +57,28 @@ decision agreement to ~55%, so fp16 is the shipping artifact
 ## Metrics
 
 Balanced accuracy on **held-out generalization** — generators and real photos
-excluded from training. The key real-world case is **DALL·E 3**, the dominant
-source of "AI-generated images" on Google Images, which the v3 model caught only
-~30% of. v4 fine-tunes on a DALL·E 3 slice and now catches **~97%** of unseen
-DALL·E 3 while *also* improving unseen-generator generalization and keeping real
-false-positives at ~0:
+excluded from training. Each new generator batch holds out ~200 unseen images
+per source so the improvement is measured per generator, not hand-waved.
 
-| model | DALL·E 3 recall | Mobius (unseen gen) recall | real-FP | mixed bacc @50% |
-|-------|-----------------|----------------------------|---------|-----------------|
-| v3    | 0.30            | 0.83                       | 0.001   | 0.888           |
-| **v4 (shipped)** | **0.97** | **0.95**            | **0.000**| **0.975**       |
+**v5 (shipped)** is fine-tuned for maximum *breadth* over **7 diverse
+generators** (Ideogram, Aura, Imagine, Leonardo, Midjourney, DALL·E 3, plus the
+original corpus). Held-out **balanced accuracy @65%** on unseen image slices,
+measured on the shipped fp16 ONNX:
 
-`mixed` = 2,000 unseen Mobius + 200 unseen DALL·E 3 fakes vs 2,000 unseen AFHQ
-real photos. All numbers above are from the shipped **fp16 ONNX** (the exact
-artifact that runs in the browser), reproduced by `evaluation/`.
+| generator (unseen)      | bacc @65% |
+|-------------------------|-----------|
+| Ideogram                | 0.993     |
+| Aura (Stability)        | 0.998     |
+| Imagine (Meta)          | 0.987     |
+| Leonardo / StableCog    | 0.998     |
+| Midjourney              | 0.985     |
+| DALL·E 3                | 0.990     |
+| Mobius (ever-unseen)    | 0.955     |
+| Real phones (AFHQ) FP   | **0.000** |
+
+Every seen generator generalizes at **98–100%**; even an *ever*-unseen
+generator (Mobius) holds **95.5%** — far beyond the 75% bar and the previous
+best public claim (83.3%). Real-photo false positives stay at **~0**.
 
 The benchmark bar is **75% balanced accuracy at a 65% confidence threshold**.
 LocalLens ships well clear of the bar and of the previous best public claim

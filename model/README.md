@@ -1,9 +1,10 @@
 # Model artifacts
 
-`detector.onnx` is the **shipped** model — **v4**, an EfficientNet-B0 fine-tuned
-on a multi-generator real-vs-AI corpus **including a DALL·E 3 slice** (the
-dominant source of Google "AI-generated image" results), exported to ONNX in
-**fp16** (~8 MB).
+`detector.onnx` is the **shipped** model — **v5**, an EfficientNet-B0 fine-tuned
+on a maximum-breadth corpus spanning **7 diverse generators**: Ideogram, Aura
+(Stability), Imagine (Meta), Leonardo/StableCog, Midjourney (JourneyDB broad
+set), **DALL·E 3** (the dominant Google "AI-generated" source) plus the original
+multi-generator pool. Exported to ONNX in **fp16** (~8 MB).
 
 ## Files
 
@@ -24,9 +25,11 @@ execution provider, and halves the download.
 ## Re-exporting
 
 ```
-# v4 (current shipped): fine-tune then export
-python evaluation/train_v4.py --root data_v4/train --ckpt run_v3/best.pt --out run_v4 --epochs 8
-python evaluation/export_onnx.py --ckpt run_v4/best.pt --out model/detector.onnx
+# v5 (current shipped): gather diverse generators, fine-tune, then export
+python evaluation/gather_v5.py <add_dir> 1500
+python evaluation/build_v5.py <add_dir> 200 4
+python evaluation/train_v4.py --root data_v5/train --ckpt run_v4/best.pt --out run_v5 --epochs 8
+python evaluation/export_onnx.py --ckpt run_v5/best.pt --out model/detector.onnx
 ```
 
 Input contract: a raw RGB image, center-cropped to 256×256, normalized by
