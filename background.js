@@ -11,7 +11,7 @@ const MODEL_CACHE = "locallens-model-v2";
 // Human-readable model build — surfaced in the popup so the installed weights
 // are always identifiable without guessing. Keep in sync with the shipped
 // model/detector.onnx (see README Metrics / git).
-const MODEL_VERSION = "v5 · 7-generator breadth";
+const MODEL_VERSION = "v6 · real-photo fix";
 
 // Small helper: report state to popup / any sender
 async function modelState() {

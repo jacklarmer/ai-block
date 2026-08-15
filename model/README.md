@@ -1,10 +1,11 @@
 # Model artifacts
 
-`detector.onnx` is the **shipped** model — **v5**, an EfficientNet-B0 fine-tuned
-on a maximum-breadth corpus spanning **7 diverse generators**: Ideogram, Aura
+`detector.onnx` is the **shipped** model — **v6**, an EfficientNet-B0 fine-tuned
+on a maximum-breadth corpus spanning **7 diverse generators** (Ideogram, Aura
 (Stability), Imagine (Meta), Leonardo/StableCog, Midjourney (JourneyDB broad
-set), **DALL·E 3** (the dominant Google "AI-generated" source) plus the original
-multi-generator pool. Exported to ONNX in **fp16** (~8 MB).
+set), **DALL·E 3** (dominant Google "AI-generated" source)) **plus a broad
+real-photography class** (diverse COCO editorial photos) that cuts real-photo
+false-positives ~8×. Exported to ONNX in **fp16** (~8 MB).
 
 ## Files
 
@@ -25,11 +26,11 @@ execution provider, and halves the download.
 ## Re-exporting
 
 ```
-# v5 (current shipped): gather diverse generators, fine-tune, then export
-python evaluation/gather_v5.py <add_dir> 1500
-python evaluation/build_v5.py <add_dir> 200 4
-python evaluation/train_v4.py --root data_v5/train --ckpt run_v4/best.pt --out run_v5 --epochs 8
-python evaluation/export_onnx.py --ckpt run_v5/best.pt --out model/detector.onnx
+# v6 (current shipped): real-photo class, fine-tune, export
+python evaluation/gather_coco.py <coco_real_dir> 25000
+python evaluation/build_v6.py <coco_real_dir> 200 3
+python evaluation/train_v4.py --root data_v6/train --ckpt run_v5/best.pt --out run_v6 --epochs 8
+python evaluation/export_onnx.py --ckpt run_v6/best.pt --out model/detector.onnx
 ```
 
 Input contract: a raw RGB image, center-cropped to 256×256, normalized by

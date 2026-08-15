@@ -60,25 +60,24 @@ Balanced accuracy on **held-out generalization** — generators and real photos
 excluded from training. Each new generator batch holds out ~200 unseen images
 per source so the improvement is measured per generator, not hand-waved.
 
-**v5 (shipped)** is fine-tuned for maximum *breadth* over **7 diverse
-generators** (Ideogram, Aura, Imagine, Leonardo, Midjourney, DALL·E 3, plus the
-original corpus). Held-out **balanced accuracy @65%** on unseen image slices,
-measured on the shipped fp16 ONNX:
+**v6 (shipped)** adds a broad **real-photography** class (diverse COCO editorial
+photos) so genuine photographs stop being false-flagged — the problem real
+sites like Wikipedia showed. Held-out balanced accuracy @65% on unseen slices:
 
-| generator (unseen)      | bacc @65% |
-|-------------------------|-----------|
-| Ideogram                | 0.993     |
-| Aura (Stability)        | 0.998     |
-| Imagine (Meta)          | 0.987     |
-| Leonardo / StableCog    | 0.998     |
-| Midjourney              | 0.985     |
-| DALL·E 3                | 0.990     |
-| Mobius (ever-unseen)    | 0.955     |
-| Real phones (AFHQ) FP   | **0.000** |
+| class (unseen)             | bacc @65% |
+|----------------------------|-----------|
+| Ideogram                   | 0.987     |
+| Aura (Stability)           | 0.995     |
+| Imagine (Meta)             | 0.980     |
+| Leonardo / StableCog       | 0.987     |
+| Midjourney                 | 0.977     |
+| DALL·E 3                   | 0.987     |
+| Mobius (ever-unseen)       | 0.981     |
+| **Real photos flagged (FP)** | **1.5%** (was 12.5% in v5) |
 
-Every seen generator generalizes at **98–100%**; even an *ever*-unseen
-generator (Mobius) holds **95.5%** — far beyond the 75% bar and the previous
-best public claim (83.3%). Real-photo false positives stay at **~0**.
+AI-generator recall stays at **98–100%** while real-photo false-positives drop
+~8× (12.5% → **1.5%** at the default 0.5 threshold) — so Wikipedia/editorial
+photography is no longer wrongly flagged.
 
 The benchmark bar is **75% balanced accuracy at a 65% confidence threshold**.
 LocalLens ships well clear of the bar and of the previous best public claim
