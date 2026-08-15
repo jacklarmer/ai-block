@@ -5,7 +5,13 @@
 //  - handling a few orchestration messages
 
 const MODEL_SRC = chrome.runtime.getURL("model/detector.onnx");
-const MODEL_CACHE = "locallens-model-v1";
+// Bump this cache name whenever the shipped weights change, so a stale cached
+// model is invalidated and the fresh bundled on-disk model is served.
+const MODEL_CACHE = "locallens-model-v2";
+// Human-readable model build — surfaced in the popup so the installed weights
+// are always identifiable without guessing. Keep in sync with the shipped
+// model/detector.onnx (see README Metrics / git).
+const MODEL_VERSION = "v5 · 7-generator breadth";
 
 // Small helper: report state to popup / any sender
 async function modelState() {
@@ -16,6 +22,7 @@ async function modelState() {
     cached: !!resp,
     bundled,
     ready: !!(resp || bundled),
+    version: MODEL_VERSION,
   };
 }
 

@@ -2,6 +2,7 @@
 const els = {
   engine: document.getElementById("engineState"),
   runtime: document.getElementById("runtimeInfo"),
+  modelVersion: document.getElementById("modelVersion"),
   enabled: document.getElementById("enabled"),
   threshold: document.getElementById("threshold"),
   thresholdVal: document.getElementById("thresholdVal"),
@@ -22,6 +23,9 @@ async function refresh() {
       setPill("warn", "model not ready");
     }
     els.runtime.textContent = state && state.bundled ? "bundled weights" : "runtime: WebGPU/WASM";
+    if (els.modelVersion && state && state.version) {
+      els.modelVersion.textContent = "model " + state.version;
+    }
   } catch (e) {
     setPill("err", "extension error");
   }
