@@ -25,6 +25,14 @@
           <input type="checkbox" id="enabled" checked />
         </label>
 
+        <label class="switch-row">
+          <span class="block-label">
+            Block computer-generated images
+            <small>Hide them entirely instead of just badging</small>
+          </span>
+          <input type="checkbox" id="blockFlagged" />
+        </label>
+
         <label class="slider-row">
           <span>Computer-generated confidence threshold <small>(lower = flag more)</small></span>
           <input type="range" id="threshold" min="30" max="90" step="1" value="50" />

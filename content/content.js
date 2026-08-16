@@ -18,6 +18,7 @@
 
   let enabled = true;
   let threshold = THRESHOLD_DEFAULT;
+  let blockFlagged = false; // OPT-IN: when true, hide computer-generated images entirely
   let scanned = new WeakSet();
   let deferred = new Set(); // far-offscreen imgs: defer until scrolled near view
   let queue = [];
@@ -27,6 +28,7 @@
   let periodicTimer = null;
   const PERIOD_MS = 1200; // paced re-check so scroll-lazy images are never missed
   const badged = new WeakSet(); // images we have placed a badge for (for cleanup)
+  let blocked = new WeakSet(); // images we have hidden (block-flag mode)
   // Session-scoped URL -> result cache: avoids re-running the model on images
   // that reappear (new <img> node, same URL — common in scroll/SPA layouts).
   const resultCache = new Map();
@@ -35,9 +37,10 @@
   // ---------- settings ----------
   function loadSettings() {
     try {
-      chrome.storage.local.get(["locallens_enabled", "locallens_threshold", "locallens_badge"], (s) => {
+      chrome.storage.local.get(["locallens_enabled", "locallens_threshold", "locallens_badge", "locallens_block"], (s) => {
         enabled = s.locallens_enabled !== false;
         threshold = typeof s.locallens_threshold === "number" ? s.locallens_threshold : THRESHOLD_DEFAULT;
+        blockFlagged = s.locallens_block === true;
         badgeStyle = s.locallens_badge || {};
         if (enabled) schedule();
       });
@@ -193,6 +196,60 @@
     }
   }
 
+  // OPT-IN "block" mode: hide a computer-generated image entirely (instead of
+  // just badging it). Uses visibility:hidden so the page layout doesn't collapse,
+  // and draws a small placeholder in the image's box so the user knows something
+  // was blocked there. Reversible — un-hiding or disabling the setting restores it.
+  function blockImage(img, result) {
+    if (!img || blocked.has(img)) return;
+    blocked.add(img);
+    try { img.setAttribute("data-locallens", result.label); } catch (e) {}
+    // hide the actual image content, preserving its layout space
+    if (img.style) img.style.visibility = "hidden";
+    // reuse a badge element as the blocking placeholder (fixed, over the box)
+    let ph = img.__locallensBadge;
+    if (!ph) {
+      ph = document.createElement("div");
+      ph.className = "locallens-badge";
+      ph.dataset.locallens = "";
+      ph.style.cssText = [
+        "position:fixed", "z-index:2147483647",
+        "background:rgba(40,40,40,0.85)", "color:#fff",
+        "font:600 11px/1.4 -apple-system,Segoe UI,Roboto,sans-serif",
+        "padding:4px 8px", "border-radius:4px", "text-align:center",
+        "pointer-events:none", "box-shadow:0 1px 4px rgba(0,0,0,0.5)",
+      ].join(";");
+      ph.textContent = "🚫 computer-generated";
+      ph.title = `blocked — ${result.label} confidence ${((result.fake || 0) * 100).toFixed(1)}%`;
+      img.__locallensBadge = ph;
+      (document.body || document.documentElement).appendChild(ph);
+    }
+    // Cover the whole image box so it reads as "blocked here"
+    const cover = () => {
+      if (!img.isConnected) { ph.style.display = "none"; return; }
+      const r = img.getBoundingClientRect();
+      if (r && r.width > 0 && r.height > 0) {
+        ph.style.left = r.left + "px";
+        ph.style.top = r.top + "px";
+        ph.style.width = r.width + "px";
+        ph.style.height = r.height + "px";
+        ph.style.display = "flex";
+        ph.style.alignItems = "center";
+        ph.style.justifyContent = "center";
+      } else {
+        ph.style.display = "none";
+      }
+    };
+    cover();
+    ph.__locallensPlace = () => { if (document.hidden || !img.isConnected) { ph.style.display = "none"; return; } cover(); };
+    if (!ph.__locallensBound) {
+      ph.__locallensBound = true;
+      window.addEventListener("scroll", ph.__locallensPlace, { passive: true, capture: true });
+      window.addEventListener("resize", ph.__locallensPlace, { passive: true });
+    }
+    badged.add(img);
+  }
+
   // ---------- processing loop (serialized) ----------
   function schedule() {
     dirty = true; // always mark pending work, even if a loop is mid-run
@@ -291,7 +348,13 @@
           // below threshold -> treat as real/unflagged but still show soft badge
           result.label = "Real";
         }
-        drawBadge(img, result);
+        if (blockFlagged && result.label === "computer-generated") {
+          // OPT-IN block mode: hide it entirely instead of just badging
+          blockImage(img, result);
+          dbg.blocked++;
+        } else {
+          drawBadge(img, result);
+        }
         dbg.badged++;
         try { if (ckey) resultCache.set(ckey, { fake: result.fake, real: result.real, label: result.label }); } catch (e) {}
         if (img.__locallensBmp) {
@@ -332,7 +395,8 @@
             const res = await LocalLensDetector.detect(loaded, {});
             dbg.detected++;
             if (res.label === "computer-generated" && res.fake < threshold) res.label = "Real";
-            drawBadge(im, res);
+            if (blockFlagged && res.label === "computer-generated") blockImage(im, res);
+            else drawBadge(im, res);
             if (loaded && loaded.close) loaded.close();
           } catch (e) { dbg.errors.push(String(e && e.message)); scanned.add(im); }
           finally { scanned.add(im); }
@@ -408,7 +472,7 @@
   }
 
   // ---------- diagnostic counters (visible via console) ----------
-  const dbg = { collected: 0, fetched: 0, detected: 0, badged: 0, cached: 0, skipped: 0, errors: [] };
+  const dbg = { collected: 0, fetched: 0, detected: 0, badged: 0, cached: 0, skipped: 0, blocked: 0, errors: [] };
   setInterval(() => {
     if (dbg.collected || dbg.detected || dbg.errors.length) {
       console.log("[LocalLens] dbg", JSON.stringify(dbg));
@@ -432,6 +496,32 @@
       if (msg && msg.type === "locallens:enable") {
         enabled = true;
         loadSettings();
+        sendResponse({ ok: true });
+        return false;
+      }
+      if (msg && msg.type === "locallens:block" && typeof msg.value === "boolean") {
+        blockFlagged = msg.value;
+        if (blockFlagged) {
+          // turn on: immediately block any already-badged computer-generated imgs
+          document.querySelectorAll("img[data-locallens]").forEach((im) => {
+            if (im.dataset.locallens === "computer-generated" && !blocked.has(im)) {
+              blocked.add(im);
+              if (im.style) im.style.visibility = "hidden";
+              if (im.__locallensBadge) {
+                im.__locallensBadge.textContent = "🚫 computer-generated";
+                im.__locallensBadge.title = "blocked (from cached verdict)";
+              }
+            }
+          });
+          schedule(); // re-collect + block any not-yet-processed flagged imgs
+        } else {
+          // turn off: restore visibility on everything we hid
+          for (const im of blocked) {
+            if (im && im.style) im.style.visibility = "";
+            removeBadge(im);
+          }
+          blocked = new WeakSet();
+        }
         sendResponse({ ok: true });
         return false;
       }

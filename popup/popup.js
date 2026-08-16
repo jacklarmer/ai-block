@@ -4,6 +4,7 @@ const els = {
   runtime: document.getElementById("runtimeInfo"),
   modelVersion: document.getElementById("modelVersion"),
   enabled: document.getElementById("enabled"),
+  blockFlagged: document.getElementById("blockFlagged"),
   threshold: document.getElementById("threshold"),
   thresholdVal: document.getElementById("thresholdVal"),
   rescan: document.getElementById("rescanBtn"),
@@ -31,8 +32,9 @@ async function refresh() {
   }
 
   // storage settings
-  chrome.storage.local.get(["locallens_enabled", "locallens_threshold"], (s) => {
+  chrome.storage.local.get(["locallens_enabled", "locallens_threshold", "locallens_block"], (s) => {
     if (typeof s.locallens_enabled === "boolean") els.enabled.checked = s.locallens_enabled;
+    els.blockFlagged.checked = s.locallens_block === true;
     if (typeof s.locallens_threshold === "number") {
       els.threshold.value = Math.round(s.locallens_threshold * 100);
       els.thresholdVal.textContent = els.threshold.value + "%";
@@ -52,6 +54,17 @@ els.enabled.addEventListener("change", () => {
       chrome.tabs.sendMessage(tabs[0].id, {
         type: els.enabled.checked ? "locallens:enable" : "locallens:disable",
       }).catch(() => {});
+    }
+  });
+});
+
+els.blockFlagged.addEventListener("change", () => {
+  const on = els.blockFlagged.checked;
+  chrome.storage.local.set({ locallens_block: on });
+  // push to the active page immediately so it takes effect without a reload
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs[0] && tabs[0].id) {
+      chrome.tabs.sendMessage(tabs[0].id, { type: "locallens:block", value: on }).catch(() => {});
     }
   });
 });
