@@ -122,7 +122,26 @@ def main():
     args = parse()
     torch.manual_seed(0); random.seed(0); np.random.seed(0)
     os.makedirs(args.out, exist_ok=True)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    if torch.cuda.is_available():
+        # Hard production-lane guard: ai-block training MUST run on the RTX 5090
+        # (the dedicated training GPU) and NEVER on the RTX PRO 6000, which is the
+        # serialized full-BF16 MiniMax / ComfyUI production lane. cuda:0 here is
+        # the PRO 6000, so select the RTX 5090 by name (honors CUDA_VISIBLE_DEVICES
+        # if the environment already pinned to a single RTX 5090).
+        import warnings
+        avail = [i for i in range(torch.cuda.device_count())]
+        rtx = [i for i in avail if "5090" in torch.cuda.get_device_name(i)]
+        pro = [i for i in avail if "PRO 6000" in torch.cuda.get_device_name(i)]
+        if pro and not rtx:
+            raise RuntimeError(
+                "refusing to train: only the RTX PRO 6000 production lane is CUDA-visible. "
+                "Export CUDA_VISIBLE_DEVICES=0000:01:00.0 to pin to the RTX 5090."
+            )
+        dev_idx = rtx[0] if rtx else 0
+        os.environ.setdefault("CUDA_DEVICE_ORDER", "PCI_BUS_ID")
+        device = f"cuda:{dev_idx}"
+    else:
+        device = "cpu"
     print("device", device, flush=True)
 
     images, labels = build_data(args.root)
