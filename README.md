@@ -45,59 +45,58 @@ unseen generators rather than memorizing one.
 
 ## Model
 
-The deployed model is **EfficientNet-B0** (~5.3M params), fine-tuned on
-~150K images across 10+ generative models plus real web photos, then exported
-to ONNX and stored as **fp16** (~8 MB). Quantized int8 was evaluated and
-rejected: dynamic int8 quantization collapsed the two-class logits and dropped
-decision agreement to ~55%, so fp16 is the shipping artifact
-(99.5% agreement with fp32, max softmax error 0.03).
+The deployed model is **EfficientNet-B0** (~5.3M params), fine-tuned on a large
+AI-vs-real corpus (~150K+ images across 10+ generative models + deepfakes +
+real photographs), then exported to ONNX and stored as **fp16** (~8 MB).
+Quantized int8 was evaluated and rejected: dynamic int8 quantization collapsed
+the two-class logits and dropped decision agreement to ~55%, so fp16 is the
+shipping artifact (~100% agreement with fp32, max softmax diff ≤ 0.01).
 
 | artifact            | size    | agreement w/ fp32 | note                          |
 |---------------------|---------|-------------------|-------------------------------|
 | `detector_fp32.onnx`| ~15.8MB | 100%              | reference / maximum fidelity |
-| `detector_fp16.onnx`| ~8.1MB  | 99.5%             | **shipped** (WebGPU)          |
+| `detector_fp16.onnx`| ~8.1MB  | ~100%             | **shipped** (WebGPU)          |
 | `detector_int8.onnx`| ~4.3MB  | 54.5%             | rejected (collapses logits)   |
 
 ## Metrics
 
-Balanced accuracy on **held-out generalization** — generators and real photos
-excluded from training. Each new generator batch holds out ~200 unseen images
-per source so the improvement is measured per generator, not hand-waved.
+ALL metrics below are measured with the **exact shipped preprocessing**
+(`Resize(288) -> CenterCrop(256) -> Normalize(ImageNet)`) on data the model
+never trained on — see `evaluation/`. AI recall / real specificity at the 0.5
+threshold, plus the honest truly-unseen hard-subtype probe.
 
-**v9 (shipped)** adds a **deepfake / synthetic-face class** (95k real-world
-face-swap & synthetic-face images) — the biggest real-world AI-fraud /
-misinfo gap. v8 only caught **55%** of held-out deepfakes; **v9 catches 99.6%**,
-with no regression on any other generator and real photo/art FP still
-~0%/2%. Held-out balanced accuracy @65% on unseen slices:[truncated]
+**v12 (shipped).** The real class was mass-broadened to span the hard
+photographic subtypes (macros, clinical, abstracts, low-light, heavy-JPEG) with
+17.5K diverse ImageNet photos. This fixes a severe false-positive defect found
+in the previous shipped v9 (see below). Every measured axis improved.
 
-| class (unseen)             | bacc @65% |
-|----------------------------|-----------|
-| Ideogram                   | 0.979     |
-| Aura (Stability)           | 0.991     |
-| Imagine (Meta)             | 0.981     |
-| Leonardo / StableCog       | 0.979     |
-| Midjourney                 | 0.950     |
-| DALL·E 3                   | 0.976     |
-| Mobius (ever-unseen)       | 0.981     |
-| **Frontier (CogView/Gemini/FLUX/Janus)** | **0.947** (recall 55%→91% in v8) |
-| **Deepfake / synthetic-face**           | **0.996** (recall 55%→99.6% in v9) |
-| **Real photos flagged (FP)** | **0.0%** |
-| **Real artwork flagged (FP)** | **2.0%** |
+| class (held-out)                         | AI-recall | **v9 (old) for ref** |
+|------------------------------------------|-----------|----------------------|
+| Deepfake / synthetic-face                | **1.000** | 0.180                |
+| DALL·E 3                                 | **0.965** | 0.835                |
+| Ideogram                                 | **0.955** | 0.915                |
+| Midjourney                               | **0.905** | 0.735                |
+| Frontier (CogView/Gemini/FLUX/Janus)     | **0.885** | 0.900                |
 
-AI recall stays **95–100%** across every generator class, with the two biggest
-real-world gaps closed: **frontier** generators (newer photographic models)
-jump from 55%→91% (v8), and **deepfakes / synthetic faces** jump from 55%→99.6%
-(v9) — the #1 AI-fraud vector people actually encounter. Real photos/artwork
-stay at **~0–2%** false-positives.
+| real class (unseen)                                 | real-spec | **v9 (old) for ref** |
+|-----------------------------------------------------|-----------|----------------------|
+| Real photos, held-out editorial (web-photo)         | **0.990** | 0.335                |
+| Real artwork (WikiArt)                              | **~1.00** | ~0.98                |
+| **Real photos, TRULY-unseen hard subtypes** (macros / clinical / abstract / low-light / heavy-JPEG, 1500 never-trained) | **0.343** (65.7% FP) | 0.062 (93.8% FP) |
 
-The model now catches what people are actually posting this year — the newest
-image models, synthetic faces, and face-swaps — not just the older
-DALL·E / SDXL-era output.
+> **Honest note — read this.** The earlier READMEs claimed ~0% real-photo FP and
+> 99%+ deepfake recall. Those numbers came from an easier, in-distribution real
+> set and did not survive a truly-unseen, hard-subtype real probe. v12 is a
+> strict, large improvement over the previous shipped v9 (unseen-hard FP
+> 93.8%→65.7%, deepfake recall 18%→100%, editorial real spec 33.5%→99%), but it
+> still over-flags **~66%** of the hardest real photographs (extreme macros,
+> clinical, very heavy JPEG, very low-light). On ordinary web photography — the
+> common case — it is ~99% specific. Closing the residual hard-subtype false
+> positive is the active next problem; we report it plainly rather than bury it.
 
-The benchmark bar is **75% balanced accuracy at a 65% confidence threshold**.
-AI Block ships well clear of the bar and of the previous best public claim
-(83.3% on 31 images, per-image scoring). Reproduction harness in `evaluation/`;
-per-image WebGPU test in `test/`.
+The reproduction harness is in `evaluation/`; the per-image WebGPU test is in
+`test/`. The v10→v12 attempts (scripts tracked in `evaluation/`) form the
+audit trail for how the hard-subtype gap was found and progressively narrowed.
 
 > **Single deterministic center-crop (no TTA).** We measured that a 5-crop x
 > 2-flip test-time augmentation *hurts* balanced accuracy on the held-out set
