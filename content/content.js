@@ -120,10 +120,10 @@
   function drawBadge(img, result) {
     if (document.hidden) return;
     const label = result.label;
-    const conf = Math.round(result.label === "AI-generated" ? result.fake * 100 : result.real * 100);
+    const conf = Math.round(result.label === "computer-generated" ? result.fake * 100 : result.real * 100);
     // tooltip so a hover reveals the exact confidence (nice on desktop)
-    const pct = result.label === "AI-generated" ? (result.fake * 100).toFixed(1) : (result.real * 100).toFixed(1);
-    const color = result.label === "AI-generated" ? "rgba(214,40,40,0.92)" : "rgba(34,139,51,0.92)";
+    const pct = result.label === "computer-generated" ? (result.fake * 100).toFixed(1) : (result.real * 100).toFixed(1);
+    const color = result.label === "computer-generated" ? "rgba(214,40,40,0.92)" : "rgba(34,139,51,0.92)";
 
     // Mark the image as already processed (do this early so re-collect skips it)
     try { img.setAttribute("data-locallens", label); } catch (e) {}
@@ -287,7 +287,7 @@
         }
         const result = await LocalLensDetector.detect(loaded, {});
         dbg.detected++;
-        if (result.label === "AI-generated" && result.fake < threshold) {
+        if (result.label === "computer-generated" && result.fake < threshold) {
           // below threshold -> treat as real/unflagged but still show soft badge
           result.label = "Real";
         }
@@ -331,7 +331,7 @@
             if (!loaded) { scanned.add(im); continue; }
             const res = await LocalLensDetector.detect(loaded, {});
             dbg.detected++;
-            if (res.label === "AI-generated" && res.fake < threshold) res.label = "Real";
+            if (res.label === "computer-generated" && res.fake < threshold) res.label = "Real";
             drawBadge(im, res);
             if (loaded && loaded.close) loaded.close();
           } catch (e) { dbg.errors.push(String(e && e.message)); scanned.add(im); }

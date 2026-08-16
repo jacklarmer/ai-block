@@ -129,7 +129,7 @@
   }
 
   // Run inference on an ImageBitmap / HTMLImageElement / canvas-sourced image.
-  // Returns { fake: <0..1>, real: <0..1>, label: "AI-generated"|"Real", ms }
+  // Returns { fake: <0..1>, real: <0..1>, label: "computer-generated"|"Real", ms }
   async function detect(img, opts = {}) {
     const o = await initOrt();
     const session = await loadSession(opts.forceReload);
@@ -169,7 +169,7 @@
     return {
       fake: fake,
       real: real,
-      label: fake >= 0.5 ? "AI-generated" : "Real",
+      label: fake >= 0.5 ? "computer-generated" : "Real",
       ms: Math.round(ms),
       modelVersion: MODEL_VERSION,
     };

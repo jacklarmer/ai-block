@@ -1,6 +1,6 @@
-# LocalLens — Local AI Image Detector (Chrome MV3)
+# LocalLens — Local Computer Image Detector (Chrome MV3)
 
-Detects AI-generated images **entirely in your browser** using WebGPU.
+Detects computer-generated images (AI) **entirely in your browser** using WebGPU.
 No cloud, no server, no uploads — every inference runs locally on your device.
 Model weights ship with the extension (one-time, small download) and then the
 extension is fully offline.
