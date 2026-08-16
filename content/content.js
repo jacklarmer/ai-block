@@ -196,35 +196,63 @@
     }
   }
 
-  // OPT-IN "block" mode: make a computer-generated image NOT EXIST on the page
-  // at all (per Jack). No badge, no placeholder, no layout space, no render —
-  // the browser should never even show it. We (1) display:none the element
-  // (no paint, no layout) and (2) sever its src/srcset so the browser stops
-  // fetching/decoding the image bytes entirely. The original src is remembered
-  // (on a background property, not an attribute we'd fight) so disabling the
-  // setting can restore the image.
+  // OPT-IN "block" mode: remove a computer-generated image — and the result
+  // card / post it's attached to — from the page ENTIRELY (per Jack). The
+  // image and its surrounding item are removed from the DOM, not hidden, so
+  // it isn't painted, takes no layout space, and the browser isn't asked to
+  // return to it. We climb from the <img> to the nearest container that reads
+  // as a "result/card/feed item" (img with >1 img, or a media/list wrapper)
+  // and drop that whole node — the item vanishes from the grid/feed as if it
+  // was never fetched. The original src is remembered so disabling the setting
+  // can't resurrect it (it's gone), but a reload will re-allow it.
+  function findResultContainer(img) {
+    let node = img;
+    for (let i = 0; i < 4 && node && node.parentElement; i++) {
+      node = node.parentElement;
+      if (!node) break;
+      const kids = node.querySelectorAll("img");
+      // a wrapper that isolates a single media result: contains our img and is
+      // either a link, an <li>, an <article>, or has a structured role.
+      if (kids.length === 1) {
+        const rn = (node.tagName || "").toLowerCase();
+        if (["a", "li", "article", "figure"].includes(rn)) return node;
+        const a = (node.closest && node.closest("a")) || node.querySelector("a");
+        if (a && a.contains(img)) return a;
+      }
+    }
+    return img; // no clean container — just remove the image itself
+  }
+
   function blockImage(img, result) {
     if (!img || blocked.has(img)) return;
     if (img.__origSrc === undefined) img.__origSrc = img.src;
     blocked.add(img);
     try { img.setAttribute("data-locallens", result.label); } catch (e) {}
     try { img.dataset.locallensBlocked = "1"; } catch (e) {}
-    if (img.style) img.style.display = "none";
-    // stop the browser from fetching/decoding the image bytes — the page now
-    // behaves as if the image was never there (no download, no render).
-    try { img.removeAttribute("srcset"); } catch (e) {}
-    try { img.src = ""; } catch (e) {}
-    try { img.srcs = undefined; } catch (e) {}
-    badged.add(img);
+    if (document.body) {
+      const card = findResultContainer(img);
+      try { card && card.remove(); } catch (e) {}
+      // if the card removal didn't actually detach the img (e.g. card was the
+      // img itself, or it got re-added), make sure the img itself is severed.
+      if (img.isConnected) {
+        if (img.style) img.style.display = "none";
+        try { img.removeAttribute("srcset"); } catch (e) {}
+        try { img.src = ""; } catch (e) {}
+      }
+      badged.add(img);
+      return;
+    }
   }
 
-  // Restore an image that was blocked (used when the block setting is turned off).
+  // Restore a blocked image. Only does something if a block was applied but the
+  // node survived (rare); if the whole card was removed there is nothing to
+  // restore in this page session — a page reload will re-allow it.
   function unblockImage(img) {
     if (!blocked.has(img)) return;
     blocked.delete(img);
     if (img) {
       if (img.style) img.style.display = "";
-      if (img.__origSrc) img.src = img.__origSrc; // restore the real source
+      if (img.__origSrc && img.src !== img.__origSrc) img.src = img.__origSrc;
       try { delete img.dataset.locallensBlocked; } catch (e) {}
     }
   }
@@ -268,7 +296,9 @@
       // timer promotes them back into the queue once they scroll toward view).
       // This avoids fetching/decoding/inferring every image on a huge feed up
       // front — the big win for Google Images / infinite-scroll pages.
-      if (!isNearViewport(img)) {
+      // In BLOCK mode we intentionally do NOT defer: we want an AI image to be
+      // removed even before it's scrolled into view, so it truly never shows up.
+      if (!blockFlagged && !isNearViewport(img)) {
         scanned.add(img);
         deferred.add(img);
         continue;
@@ -447,6 +477,52 @@
       promoteDeferred(); // surfaces offscreen images that scrolled into view
       schedule();
     }, { passive: true, capture: true });
+    // THE reliable lazy-load catch: IntersectionObserver fires the instant any
+    // <img> scrolls into the viewport, which is exactly when Google Images /
+    // X / infinite feeds swap in their lazy src. This is far more dependable
+    // than scroll-event timing for "new images appear as I scroll" — we hook
+    // it to reschedule so every freshly-rendered image gets collected AND
+    // (if block is on) removed without being missed.
+    let io = null;
+    try {
+      if ("IntersectionObserver" in window) {
+        io = new IntersectionObserver(
+          (entries) => {
+            let hit = false;
+            for (const e of entries) {
+              if (!e.isIntersecting) continue;
+              if (e.target && e.target.tagName === "IMG" && !scanned.has(e.target)) {
+                enqueue(e.target);
+                hit = true;
+              }
+              io.unobserve(e.target);
+            }
+            if (hit) schedule();
+          },
+          { rootMargin: "200px 0px 200px 0px", threshold: 0.01 }
+        );
+        // observe all current + future imgs: observer re-walked opportunistically
+        const attach = () => {
+          const imgs = document.querySelectorAll("img");
+          for (const im of imgs) if (!io.__seen || !io.__seen.has(im)) {
+            if (!io.__seen) io.__seen = new Set();
+            io.__seen.add(im);
+            io.observe(im);
+          }
+        };
+        io.__seen = new Set();
+        attach();
+        document.addEventListener("DOMContentLoaded", attach);
+        // keep catching newly added images (lazy-loaders append nodes later)
+        try {
+          (new MutationObserver(() => {
+            for (const im of document.querySelectorAll("img")) {
+              if (!io.__seen.has(im)) { io.__seen.add(im); io.observe(im); }
+            }
+          })).observe(document.documentElement, { childList: true, subtree: true });
+        } catch (e) {}
+      }
+    } catch (e) {}
     startPeriodic();
   }
 
