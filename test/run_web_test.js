@@ -1,5 +1,5 @@
 /**
- * LocalLens end-to-end WebGPU test harness.
+ * AI Block end-to-end WebGPU test harness.
  *
  * Serves the extension's onnxruntime-web + detector artifacts over a local HTTP
  * server, opens a real Chrome tab (headless, WebGPU enabled), then uses the SAME

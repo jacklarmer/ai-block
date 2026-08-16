@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "LocalLens — Local AI Image Detector",
-  "version": "1.0.0",
-  "description": "Detects computer-generated images (AI) entirely in your browser using WebGPU. No cloud, no uploads, private by design.",
+  "name": "AI Block — Block Computer-Generated Images",
+  "version": "1.1.0",
+  "description": "AI Block detects and blocks computer-generated (AI) images entirely in your browser using WebGPU. No cloud, no uploads, private by design.",
   "minimum_chrome_version": "113",
   "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": ["<all_urls>"],
@@ -11,7 +11,7 @@
   },
   "action": {
     "default_popup": "popup/popup.html",
-    "default_title": "LocalLens",
+    "default_title": "AI Block",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",

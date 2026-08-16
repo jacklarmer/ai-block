@@ -1,11 +1,11 @@
-# LocalLens — Local Computer Image Detector (Chrome MV3)
+# AI Block — Local Computer Image Detector (Chrome MV3)
 
 Detects computer-generated images (AI) **entirely in your browser** using WebGPU.
 No cloud, no server, no uploads — every inference runs locally on your device.
 Model weights ship with the extension (one-time, small download) and then the
 extension is fully offline.
 
-> **Privacy by design**: images never leave your machine. LocalLens is built for
+> **Privacy by design**: images never leave your machine. AI Block is built for
 > the Local AI challenge — all detection happens in-browser via
 > ONNX Runtime Web on the WebGPU execution provider (WASM fallback included).
 
@@ -93,7 +93,7 @@ image models, synthetic faces, and face-swaps — not just the older
 DALL·E / SDXL-era output.
 
 The benchmark bar is **75% balanced accuracy at a 65% confidence threshold**.
-LocalLens ships well clear of the bar and of the previous best public claim
+AI Block ships well clear of the bar and of the previous best public claim
 (83.3% on 31 images, per-image scoring). Reproduction harness in `evaluation/`;
 per-image WebGPU test in `test/`.
 

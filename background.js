@@ -1,4 +1,4 @@
-// LocalLens background service worker (MV3)
+// AI Block background service worker (MV3)
 // Responsible for:
 //  - locating / caching the ONNX model weights (one-time download, then offline)
 //  - exposing model availability + settings to the popup

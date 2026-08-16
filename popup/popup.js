@@ -1,4 +1,4 @@
-// LocalLens popup controller
+// AI Block popup controller
 const els = {
   engine: document.getElementById("engineState"),
   runtime: document.getElementById("runtimeInfo"),

@@ -1,4 +1,4 @@
-// LocalLens content script — finds <img> elements, runs on-device detection,
+// AI Block content script — finds <img> elements, runs on-device detection,
 // and overlays a small confidence badge. Also powers click-to-inspect on the
 // active image (popup + context menu via messaging).
 (function () {
@@ -263,7 +263,7 @@
       // warm the detector session once
       await LocalLensDetector.loadSession();
     } catch (e) {
-      console.error("[LocalLens] model load failed:", e);
+      console.error("[AI Block] model load failed:", e);
       running = false;
       return;
     }
@@ -475,7 +475,7 @@
   const dbg = { collected: 0, fetched: 0, detected: 0, badged: 0, cached: 0, skipped: 0, blocked: 0, errors: [] };
   setInterval(() => {
     if (dbg.collected || dbg.detected || dbg.errors.length) {
-      console.log("[LocalLens] dbg", JSON.stringify(dbg));
+      console.log("[AI Block] dbg", JSON.stringify(dbg));
       if (dbg.errors.length > 3) dbg.errors.length = 3; // avoid unbounded growth
     }
   }, 10000);

@@ -1,4 +1,4 @@
-// LocalLens detector — runs the real-vs-AI classifier fully in-browser via
+// AI Block detector — runs the real-vs-AI classifier fully in-browser via
 // ONNX Runtime Web (WebGPU EP) with a WASM CPU fallback. No network, no server,
 // no uploads.
 //
@@ -73,7 +73,7 @@
           return await o.InferenceSession.create(MODEL_URL, opts);
         } catch (e) {
           lastErr = e;
-          console.warn("[LocalLens] EP", ep, "failed:", e && e.message);
+          console.warn("[AI Block] EP", ep, "failed:", e && e.message);
         }
       }
       throw lastErr;
