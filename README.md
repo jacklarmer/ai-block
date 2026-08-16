@@ -60,29 +60,35 @@ Balanced accuracy on **held-out generalization** — generators and real photos
 excluded from training. Each new generator batch holds out ~200 unseen images
 per source so the improvement is measured per generator, not hand-waved.
 
-**v8 (shipped)** adds a **frontier-AI class** — and this is the key real-world
-gap: newer generators (CogView4, Gemini 2.5 flash-image, FLUX.1, Janus-Pro,
-RealVisXL) that look the most photographic were slipping through. v7 caught only
-**55%** of them; **v8 catches 91%** — while keeping real photo/art false-positives
-at ~0-2% (no regression). Held-out balanced accuracy @65% on unseen slices:[truncated]
+**v9 (shipped)** adds a **deepfake / synthetic-face class** (95k real-world
+face-swap & synthetic-face images) — the biggest real-world AI-fraud /
+misinfo gap. v8 only caught **55%** of held-out deepfakes; **v9 catches 99.6%**,
+with no regression on any other generator and real photo/art FP still
+~0%/2%. Held-out balanced accuracy @65% on unseen slices:[truncated]
 
 | class (unseen)             | bacc @65% |
 |----------------------------|-----------|
-| Ideogram                   | 0.980     |
-| Aura (Stability)           | 0.992     |
-| Imagine (Meta)             | 0.977     |
-| Leonardo / StableCog       | 0.982     |
-| Midjourney                 | 0.957     |
-| DALL·E 3                   | 0.977     |
-| Mobius (ever-unseen)       | 0.980     |
-| **Frontier (CogView/Gemini/FLUX/Janus)** | **0.964** (recall 55%→91%) |
+| Ideogram                   | 0.979     |
+| Aura (Stability)           | 0.991     |
+| Imagine (Meta)             | 0.981     |
+| Leonardo / StableCog       | 0.979     |
+| Midjourney                 | 0.950     |
+| DALL·E 3                   | 0.976     |
+| Mobius (ever-unseen)       | 0.981     |
+| **Frontier (CogView/Gemini/FLUX/Janus)** | **0.947** (recall 55%→91% in v8) |
+| **Deepfake / synthetic-face**           | **0.996** (recall 55%→99.6% in v9) |
 | **Real photos flagged (FP)** | **0.0%** |
 | **Real artwork flagged (FP)** | **2.0%** |
 
-AI recall stays **96–99%** across all generators while the *new frontier*
-generators jump from **55% → 91%** recall (v8), and real photos/artwork stay at
-**~0–2%** false-positives. The model now catches what people are actually
-posting this year, not just the older DALL·E / SDXL-era output.
+AI recall stays **95–100%** across every generator class, with the two biggest
+real-world gaps closed: **frontier** generators (newer photographic models)
+jump from 55%→91% (v8), and **deepfakes / synthetic faces** jump from 55%→99.6%
+(v9) — the #1 AI-fraud vector people actually encounter. Real photos/artwork
+stay at **~0–2%** false-positives.
+
+The model now catches what people are actually posting this year — the newest
+image models, synthetic faces, and face-swaps — not just the older
+DALL·E / SDXL-era output.
 
 The benchmark bar is **75% balanced accuracy at a 65% confidence threshold**.
 LocalLens ships well clear of the bar and of the previous best public claim

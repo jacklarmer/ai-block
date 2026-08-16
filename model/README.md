@@ -1,12 +1,13 @@
 # Model artifacts
 
-`detector.onnx` is the **shipped** model — **v8**, an EfficientNet-B0 fine-tuned
+`detector.onnx` is the **shipped** model — **v9**, an EfficientNet-B0 fine-tuned
 on a maximum-breadth, low-false-positive corpus:
+- **deepfake / synthetic-face class** (95k face-swaps & synthetic faces) —
+  deepfake recall **55% → 99.6%**,
 - **frontier AI generators** (CogView4-6B, Gemini 2.5 flash-image, FLUX.1-dev,
-  Janus-Pro-7B, RealVisXL) from bitmind benchmark snapshots — the newer,
-  most-photographic outputs; frontier recall **55% → 91%**,
+  Janus-Pro-7B, RealVisXL) — frontier recall **55% → 91%**,
 - **7+ established AI generators** (Ideogram, Aura, Imagine, Leonardo,
-  Midjourney, DALL·E 3) — 96–99% recall,
+  Midjourney, DALL·E 3) — 95–99% recall,
 - **real-photography class** (COCO editorial) — real photo FP **~0%**,
 - **real-human-art class** (12k WikiArt) — real art FP **47.5% → ~2%**.
 
@@ -31,11 +32,13 @@ execution provider, and halves the download.
 ## Re-exporting
 
 ```
-# v8 (current shipped): frontier-AI class, fine-tune, export
-python evaluation/gather_frontier.py <frontier_dir> 9000
-python evaluation/build_v8.py <frontier_dir> 200 4
-python evaluation/train_v4.py --root data_v8/train --ckpt run_v7/best.pt --out run_v8 --epochs 8
-python evaluation/export_onnx.py --ckpt run_v8/best.pt --out model/detector.onnx
+# v9 (current shipped): deepfake class, fine-tune, export
+python evaluation/download_deepfake.sh   # pulls bitmind/DeepfakeDataset AI.zip
+python evaluation/build_v9.py <deepfake_dir> 200 4
+python evaluation/train_v4.py --root data_v9/train --ckpt run_v8/best.pt --out run_v9 --epochs 8
+python evaluation/export_onnx.py --ckpt run_v9/best.pt --out model/detector.onnx
+# eval (note: eval_aid.py REQUIRES the model path)
+python evaluation/eval_aid.py --real-dir data_v9/test/real --fake-dir data_v9/test/fake/deepfake --onnx model/detector.onnx
 ```
 
 Input contract: a raw RGB image, center-cropped to 256×256, normalized by
