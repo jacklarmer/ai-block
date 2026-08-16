@@ -26,6 +26,7 @@
   let badgeStyle = {};
   let periodicTimer = null;
   const PERIOD_MS = 1200; // paced re-check so scroll-lazy images are never missed
+  const badged = new WeakSet(); // images we have placed a badge for (for cleanup)
   // Session-scoped URL -> result cache: avoids re-running the model on images
   // that reappear (new <img> node, same URL — common in scroll/SPA layouts).
   const resultCache = new Map();
@@ -108,54 +109,88 @@
   }
 
   // ---------- badge drawing ----------
+  // CRITICAL: do NOT re-parent / wrap the <img>. Wrapping a lazy-loaded image
+  // (loading=lazy, content-visibility, virtualized galleries, srcset swaps)
+  // forces Chrome to drop + re-fetch it — which is exactly the "image loads
+  // then disappears" bug users saw. It also breaks structural CSS selectors
+  // (parent > img) so galleries lose layout. Instead we draw the badge as a
+  // SEPARATE absolutely-positioned element laid out on top using the img's
+  // current bounding box, and re-position it on scroll/resize. The <img> and
+  // its parent are never touched, so no unload and no layout shift.
   function drawBadge(img, result) {
     if (document.hidden) return;
     const label = result.label;
     const conf = Math.round(result.label === "AI-generated" ? result.fake * 100 : result.real * 100);
-    const color = result.label === "AI-generated" ? "rgba(214,40,40,0.92)" : "rgba(34,139,51,0.92)";
     // tooltip so a hover reveals the exact confidence (nice on desktop)
     const pct = result.label === "AI-generated" ? (result.fake * 100).toFixed(1) : (result.real * 100).toFixed(1);
+    const color = result.label === "AI-generated" ? "rgba(214,40,40,0.92)" : "rgba(34,139,51,0.92)";
 
-    // Wrap the img in a DEDICATED container we fully control. We must NOT touch
-    // the existing parent's style/layout — host pages (e.g. X/Twitter) put
-    // critical inline styles (width, aspect-ratio, display) on the image's real
-    // parent; mutating them collapses the layout and makes images vanish.
-    let wrap = img.closest("[data-locallens-wrap]");
-    if (!wrap) {
-      if (!img.parentNode) return; // detached image — skip badge
-      wrap = document.createElement("span");
-      wrap.className = "locallens-badge-wrap";
-      wrap.style.cssText = "position:relative;display:inline-block;line-height:0;";
-      wrap.setAttribute("data-locallens-wrap", "1");
-      // Insert as the img's new parent without disturbing the rest of the tree.
-      img.parentNode.insertBefore(wrap, img);
-      wrap.appendChild(img);
+    // Mark the image as already processed (do this early so re-collect skips it)
+    try { img.setAttribute("data-locallens", label); } catch (e) {}
+    badged.add(img);
+
+    // Reuse an existing badge for this img if present (keeps it from stacking)
+    let badge = img.__locallensBadge;
+    if (!badge) {
+      badge = document.createElement("div");
+      badge.className = "locallens-badge";
+      badge.dataset.locallens = "";
+      badge.style.cssText = [
+        "position:fixed",                 // viewport-anchored: no parent dependency
+        "z-index:2147483647",
+        "background:" + color,
+        "color:#fff",
+        "font:600 11px/1.4 -apple-system,Segoe UI,Roboto,sans-serif",
+        "padding:2px 6px",
+        "border-radius:4px",
+        "pointer-events:none",
+        "box-shadow:0 1px 3px rgba(0,0,0,0.4)",
+        "max-width:200px", "overflow:hidden", "white-space:nowrap", "text-overflow:ellipsis",
+      ].join(";");
+      badge.textContent = `${label} · ${conf}%`;
+      badge.title = `${result.kind === "cached" ? "cached · " : ""}${label} confidence ${pct}% (fake=${(result.fake * 100).toFixed(1)}%)`;
+      img.__locallensBadge = badge;
+      // Append to BODY, never to the img or its parent — the img stays untouched.
+      (document.body || document.documentElement).appendChild(badge);
+    } else {
+      badge.textContent = `${label} · ${conf}%`;
+      badge.style.background = color;
     }
 
-    const badge = document.createElement("div");
-    badge.className = "locallens-badge";
-    badge.textContent = `${label} · ${conf}%`;
-    badge.title = `${result.kind === "cached" ? "cached · " : ""}${label} confidence ${pct}% (fake=${(result.fake*100).toFixed(1)}%)`;
-    badge.style.cssText = [
-      "position:absolute",
-      "top:4px",
-      "left:4px",
-      "z-index:2147483647",
-      "background:" + color,
-      "color:#fff",
-      "font:600 11px/1.4 -apple-system,Segoe UI,Roboto,sans-serif",
-      "padding:2px 6px",
-      "border-radius:4px",
-      "pointer-events:none",
-      "box-shadow:0 1px 3px rgba(0,0,0,0.4)",
-    ].join(";");
-    badge.dataset.locallens = img.dataset.locallens || "";
-    // Mark the image as already processed
-    try {
-      img.setAttribute("data-locallens", result.label);
-    } catch (e) {}
-    wrap.appendChild(badge);
-    img.__locallensBadge = badge;
+    // Position the fixed badge over the img's current on-screen box.
+    const place = () => {
+      if (!img.isConnected) return;
+      const r = img.getBoundingClientRect();
+      if (r && (r.width > 0 && r.height > 0)) {
+        badge.style.left = (r.left + 4) + "px";
+        badge.style.top = (r.top + 4) + "px";
+        badge.style.display = "block";
+      } else {
+        badge.style.display = "none"; // off-screen / not laid out
+      }
+    };
+    place();
+    // Keep it tracking the image as the user scrolls / resizes / lazy-loads.
+    badge.__locallensPlace = () => { if (document.hidden || !img.isConnected) { badge.style.display = "none"; return; } place(); };
+    if (!badge.__locallensBound) {
+      badge.__locallensBound = true;
+      window.addEventListener("scroll", badge.__locallensPlace, { passive: true, capture: true });
+      window.addEventListener("resize", badge.__locallensPlace, { passive: true });
+    }
+  }
+
+  // Remove this image's badge (used when an image is removed from the page, or
+  // to drop leftovers from detached images).
+  function removeBadge(img) {
+    const b = img && img.__locallensBadge;
+    if (b) {
+      if (b.__locallensBound) {
+        window.removeEventListener("scroll", b.__locallensPlace, { capture: true });
+        window.removeEventListener("resize", b.__locallensPlace);
+      }
+      b.remove();
+      img.__locallensBadge = null;
+    }
   }
 
   // ---------- processing loop (serialized) ----------
@@ -337,10 +372,19 @@
   // schedule() is cheap & idempotent (collectImages dedups via `scanned`), so
   // this is safe to run periodically while enabled. When no new images arrive,
   // the loop drains and rests; the timer simply nudges it to re-collect.
+  // Drop badges for images that have been removed from the page (virtualized /
+  // infinite-scroll galleries re-use nodes and discard others). Prevents orphan
+  // badges floating over the page, matched to nothing.
+  function cleanupDetachedBadges() {
+    for (const img of badged) {
+      if (!img.isConnected) removeBadge(img);
+    }
+  }
   function startPeriodic() {
     if (periodicTimer) return;
     periodicTimer = setInterval(() => {
       if (!enabled) return;
+      cleanupDetachedBadges();
       // Only wake the loop when there is genuinely new work — promote deferred
       // (scroll-into-view) images and/or newly collected unscanned images.
       const promoted = promoteDeferred();
