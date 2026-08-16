@@ -60,28 +60,29 @@ Balanced accuracy on **held-out generalization** — generators and real photos
 excluded from training. Each new generator batch holds out ~200 unseen images
 per source so the improvement is measured per generator, not hand-waved.
 
-**v7 (shipped)** adds a **real human-artwork class** (12k WikiArt paintings,
-illustrations, historic plates) — the class that was most often false-flagged
-(real art/illustrations look "clean" like AI). Held-out balanced accuracy @65%
-on unseen slices:[truncated]
+**v8 (shipped)** adds a **frontier-AI class** — and this is the key real-world
+gap: newer generators (CogView4, Gemini 2.5 flash-image, FLUX.1, Janus-Pro,
+RealVisXL) that look the most photographic were slipping through. v7 caught only
+**55%** of them; **v8 catches 91%** — while keeping real photo/art false-positives
+at ~0-2% (no regression). Held-out balanced accuracy @65% on unseen slices:[truncated]
 
 | class (unseen)             | bacc @65% |
 |----------------------------|-----------|
-| Ideogram                   | 0.976     |
-| Aura (Stability)           | 0.994     |
-| Imagine (Meta)             | 0.981     |
-| Leonardo / StableCog       | 0.986     |
-| Midjourney                 | 0.963     |
-| DALL·E 3                   | 0.989     |
-| Mobius (ever-unseen)       | 0.985     |
+| Ideogram                   | 0.980     |
+| Aura (Stability)           | 0.992     |
+| Imagine (Meta)             | 0.977     |
+| Leonardo / StableCog       | 0.982     |
+| Midjourney                 | 0.957     |
+| DALL·E 3                   | 0.977     |
+| Mobius (ever-unseen)       | 0.980     |
+| **Frontier (CogView/Gemini/FLUX/Janus)** | **0.964** (recall 55%→91%) |
 | **Real photos flagged (FP)** | **0.0%** |
-| **Real artwork flagged (FP)** | **2.0%** (was 47.5% in v6) |
+| **Real artwork flagged (FP)** | **2.0%** |
 
-AI-generator recall stays at **96–99%** across all generators while real false
-positives drop to near zero — real **photographs** at **0%** and, the big one,
-real **artwork/illustrations** at **~2%** (was **47.5%** in v6; those are what
-made Wikipedia pages look over-flagged). The v7 model teaches the detector that
-"polished/artistic/clean image" does NOT mean AI-generated.
+AI recall stays **96–99%** across all generators while the *new frontier*
+generators jump from **55% → 91%** recall (v8), and real photos/artwork stay at
+**~0–2%** false-positives. The model now catches what people are actually
+posting this year, not just the older DALL·E / SDXL-era output.
 
 The benchmark bar is **75% balanced accuracy at a 65% confidence threshold**.
 LocalLens ships well clear of the bar and of the previous best public claim
