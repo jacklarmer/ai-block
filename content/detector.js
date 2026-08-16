@@ -150,7 +150,7 @@
     }
     const vals = Array.from(out.data);
     // Model outputs 2-class logits -> softmax to get calibrated probabilities.
-    // index 1 = "fake" (AI-generated).
+    // index 1 = "fake" (computer-generated).
     let p0, p1;
     if (vals.length >= 2) {
       // numerically stable softmax over the two logits
