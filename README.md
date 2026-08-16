@@ -18,8 +18,9 @@ extension is fully offline.
    locally through ONNX Runtime Web on the **WebGPU** backend.
 4. A small corner tag shows the verdict + confidence % for each image.
    (Optional "block" mode — enabled from the popup — removes computer-generated
-   images from the page entirely: they never render and take no space, as if
-   they were never there.)
+   images AND the post/result card they sit in from the page entirely: the item
+   vanishes from the grid/feed as if it was never fetched. Scroll-lazy images
+   on Google Images / infinite feeds are caught via an IntersectionObserver.)
 
 Every image is classified by a learned model that was trained on a diverse
 multi-generator corpus (SDXL, Stable Diffusion, Midjourney, BigGAN, ADM, glide,
