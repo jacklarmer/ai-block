@@ -453,11 +453,26 @@
       if (!img.isConnected) removeBadge(img);
     }
   }
+  // Robust badge positioning: on reflow-heavy lazy-load feeds the image's
+  // on-screen box can shift after images above it load, leaving a fixed badge
+  // visually detached from its image until the next scroll/resize. Reposition
+  // every live badge off the images' current boxes on each periodic tick (and
+  // on layout-inducing window events) so badges always track their image even
+  // with no user scrolling.
+  function repositionBadges() {
+    if (document.hidden) return;
+    for (const img of badged) {
+      if (!img.isConnected) continue;
+      const b = img.__locallensBadge;
+      if (b && b.__locallensPlace) b.__locallensPlace();
+    }
+  }
   function startPeriodic() {
     if (periodicTimer) return;
     periodicTimer = setInterval(() => {
       if (!enabled) return;
       cleanupDetachedBadges();
+      repositionBadges();
       // Only wake the loop when there is genuinely new work — promote deferred
       // (scroll-into-view) images and/or newly collected unscanned images.
       const promoted = promoteDeferred();
