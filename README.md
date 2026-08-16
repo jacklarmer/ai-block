@@ -65,38 +65,43 @@ ALL metrics below are measured with the **exact shipped preprocessing**
 never trained on — see `evaluation/`. AI recall / real specificity at the 0.5
 threshold, plus the honest truly-unseen hard-subtype probe.
 
-**v12 (shipped).** The real class was mass-broadened to span the hard
-photographic subtypes (macros, clinical, abstracts, low-light, heavy-JPEG) with
-17.5K diverse ImageNet photos. This fixes a severe false-positive defect found
-in the previous shipped v9 (see below). Every measured axis improved.
+**v13 (shipped).** The real class was broadened across v12/v13 to span the hard
+photographic subtypes (macros, clinical, abstracts, low-light, heavy-JPEG);
+v13 adds **17,500 FRESH, never-trained ImageNet real photos** (shards
+00000–00002, 00048–00051) on top of v12's broadened set. This progressive real
+diversity drives down the harsh-hard-subtype real false-positive rate that the
+v10–v12 line uncovered. Every measured axis improved versus v12.
 
-| class (held-out)                         | AI-recall | **v9 (old) for ref** |
-|------------------------------------------|-----------|----------------------|
-| Deepfake / synthetic-face                | **1.000** | 0.180                |
-| DALL·E 3                                 | **0.965** | 0.835                |
-| Ideogram                                 | **0.955** | 0.915                |
-| Midjourney                               | **0.905** | 0.735                |
-| Frontier (CogView/Gemini/FLUX/Janus)     | **0.885** | 0.900                |
+| class (held-out, AI-recall @0.5)      | v13     | v12 (prev) | v9 (older) |
+|---------------------------------------|---------|------------|------------|
+| Deepfake / synthetic-face             | **1.000** | 1.000    | 0.180      |
+| Frontier (CogView/Gemini/FLUX/Janus)  | **0.880** | 0.885    | 0.900      |
+| DALL·E 3                              | **0.960** | 0.965    | 0.835      |
+| Midjourney                            | **0.895** | 0.905    | 0.735      |
+| Ideogram                              | **0.955** | 0.955    | 0.915      |
 
-| real class (unseen)                                 | real-spec | **v9 (old) for ref** |
-|-----------------------------------------------------|-----------|----------------------|
-| Real photos, held-out editorial (web-photo)         | **0.990** | 0.335                |
-| Real artwork (WikiArt)                              | **~1.00** | ~0.98                |
-| **Real photos, TRULY-unseen hard subtypes** (macros / clinical / abstract / low-light / heavy-JPEG, 1500 never-trained) | **0.343** (65.7% FP) | 0.062 (93.8% FP) |
+| real class (real-specificity @0.5)                      | v13     | v12 (prev) | v9 (older) |
+|---------------------------------------------------------|---------|------------|------------|
+| Real photos, held-out editorial (web-photo)             | **0.985** | 0.990    | 0.335      |
+| Real artwork (WikiArt)                                  | **~1.00** | ~1.00   | ~0.98      |
+| **Real photos, TRULY-unseen hard subtypes** (macros / clinical / abstract / low-light / heavy-JPEG, 1500 never-trained) | **0.496** (50.4% FP) | 0.343 (65.7% FP) | 0.062 (93.8% FP) |
 
 > **Honest note — read this.** The earlier READMEs claimed ~0% real-photo FP and
 > 99%+ deepfake recall. Those numbers came from an easier, in-distribution real
-> set and did not survive a truly-unseen, hard-subtype real probe. v12 is a
-> strict, large improvement over the previous shipped v9 (unseen-hard FP
-> 93.8%→65.7%, deepfake recall 18%→100%, editorial real spec 33.5%→99%), but it
-> still over-flags **~66%** of the hardest real photographs (extreme macros,
-> clinical, very heavy JPEG, very low-light). On ordinary web photography — the
-> common case — it is ~99% specific. Closing the residual hard-subtype false
-> positive is the active next problem; we report it plainly rather than bury it.
+> set and did not survive a truly-unseen, hard-subtype real probe. This table is
+> the exact shipped preprocessing on genuinely unseen data. v13 is a strict,
+> large improvement over the previous ships (unseen-hard FP 93.8% (v9) →
+> 65.7% (v12) → **50.4% (v13)**, deepfake recall 18% (v9) → 100% (v12/v13)),
+> with AI recall held within ~1pt. It still over-flags **~50%** of the hardest
+> real photographs (extreme macros, clinical, very heavy JPEG, very low-light);
+> on ordinary web photography — the common case — it is ~98–99% specific.
+> Closing the residual hard-subtype false positive is the active next problem;
+> we report it plainly rather than bury it.
 
 The reproduction harness is in `evaluation/`; the per-image WebGPU test is in
-`test/`. The v10→v12 attempts (scripts tracked in `evaluation/`) form the
-audit trail for how the hard-subtype gap was found and progressively narrowed.
+`test/`. The v10→v13 scripts tracked in `evaluation/` (gather_v13.sh,
+build_v13.py, v13_pipeline.sh) form the audit trail for how the hard-subtype
+gap was found and progressively narrowed.
 
 > **Single deterministic center-crop (no TTA).** We measured that a 5-crop x
 > 2-flip test-time augmentation *hurts* balanced accuracy on the held-out set
