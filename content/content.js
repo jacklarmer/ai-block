@@ -19,6 +19,7 @@
   let enabled = true;
   let threshold = THRESHOLD_DEFAULT;
   let scanned = new WeakSet();
+  let deferred = new Set(); // far-offscreen imgs: defer until scrolled near view
   let queue = [];
   let running = false;
   let dirty = false; // set by observer/scroll even while the loop is running
@@ -57,6 +58,21 @@
     // intrinsic tiny image (e.g. a real 32x32 favicon)
     if ((img.naturalWidth || 0) * (img.naturalHeight || 0) < MIN_IMG_AREA) return true;
     return false;
+  }
+
+  // Viewport-aware: whether this image is near the visible viewport (with a
+  // margin) so we only pay for fetch/decode/inference on images the user will
+  // actually see soon. Far-offscreen images are deferred until scrolled into
+  // range by the periodic rescan — slashes wasted work on huge infinite feeds.
+  const vh_ = (window.innerHeight || 1200);
+  const VP_MARGIN = vh_ - 50; // ~1 viewport of lookahead
+  function isNearViewport(img) {
+    const r = img.getBoundingClientRect();
+    if (!r) return true;
+    const vh = window.innerHeight || 1200;
+    // keep a generous margin (above and below) so we prefetch just-ahead-of-view
+    const top = -vh, bottom = vh * 2 + VP_MARGIN;
+    return r.bottom >= top && r.top <= bottom;
   }
 
   // ---------- image harvesting ----------
@@ -176,6 +192,17 @@
         break;
       }
 
+      // Viewport-aware deferral: skip far-offscreen images for now (add to
+      // `scanned`+`deferred` so the normal collect skips them and the periodic
+      // timer promotes them back into the queue once they scroll toward view).
+      // This avoids fetching/decoding/inferring every image on a huge feed up
+      // front — the big win for Google Images / infinite-scroll pages.
+      if (!isNearViewport(img)) {
+        scanned.add(img);
+        deferred.add(img);
+        continue;
+      }
+
       try {
         // Load the image pixel data respecting CORS. Many image hosts (e.g.
         // Twitter's pbs.twimg.com) serve images with Access-Control-Allow-Origin,
@@ -286,6 +313,23 @@
     queue.push(img);
   }
 
+  // Promote deferred (far-offscreen) images that have scrolled near the
+  // viewport back into the processing queue, and drop ones that are gone.
+  function promoteDeferred() {
+    let promoted = false;
+    for (const img of deferred) {
+      if (!img.isConnected) { deferred.delete(img); continue; }
+      if (isNearViewport(img)) {
+        // allow re-collection by the main loop
+        deferred.delete(img);
+        scanned.delete(img);
+        enqueue(img);
+        promoted = true;
+      }
+    }
+    return promoted;
+  }
+
   // ---------- MutationObserver for lazy content ----------
   let mo = null;
   // Paced re-check: guarantees newly lazy-loaded (scroll) images get detected
@@ -297,10 +341,10 @@
     if (periodicTimer) return;
     periodicTimer = setInterval(() => {
       if (!enabled) return;
-      // Only wake the loop when there is genuinely new (unscanned) work —
-      // collectImages is cheap and dedups via `scanned`. This keeps the timer
-      // from spuriously marking `dirty` and pinning the processing loop.
-      if (collectImages().length > 0) schedule();
+      // Only wake the loop when there is genuinely new work — promote deferred
+      // (scroll-into-view) images and/or newly collected unscanned images.
+      const promoted = promoteDeferred();
+      if (promoted || collectImages().length > 0) schedule();
     }, PERIOD_MS);
   }
   function startObserver() {
@@ -309,8 +353,13 @@
     mo.observe(document.documentElement, { childList: true, subtree: true });
     // Belt-and-suspenders: some lazy-loaders swap images on scroll without a
     // childList mutation we can rely on (or batch them). A passive scroll
-    // listener guarantees scrolling surfaces new images.
-    window.addEventListener("scroll", () => schedule(), { passive: true, capture: true });
+    // listener guarantees scrolling surfaces new images — and cheaply promotes
+    // any deferred (previously offscreen) images into the queue immediately so
+    // badges appear as soon as content scrolls into view.
+    window.addEventListener("scroll", () => {
+      promoteDeferred(); // surfaces offscreen images that scrolled into view
+      schedule();
+    }, { passive: true, capture: true });
     startPeriodic();
   }
 
