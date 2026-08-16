@@ -17,8 +17,9 @@ extension is fully offline.
 3. A fine-tuned **EfficientNet-B0** classifier (exported to ONNX, fp16) runs
    locally through ONNX Runtime Web on the **WebGPU** backend.
 4. A small corner tag shows the verdict + confidence % for each image.
-   (Optional "block" mode — enabled from the popup — hides computer-generated
-   images entirely instead of just tagging them, so they don't pop up at all.)
+   (Optional "block" mode — enabled from the popup — removes computer-generated
+   images from the page entirely: they never render and take no space, as if
+   they were never there.)
 
 Every image is classified by a learned model that was trained on a diverse
 multi-generator corpus (SDXL, Stable Diffusion, Midjourney, BigGAN, ADM, glide,

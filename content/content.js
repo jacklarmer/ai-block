@@ -196,58 +196,37 @@
     }
   }
 
-  // OPT-IN "block" mode: hide a computer-generated image entirely (instead of
-  // just badging it). Uses visibility:hidden so the page layout doesn't collapse,
-  // and draws a small placeholder in the image's box so the user knows something
-  // was blocked there. Reversible — un-hiding or disabling the setting restores it.
+  // OPT-IN "block" mode: make a computer-generated image NOT EXIST on the page
+  // at all (per Jack). No badge, no placeholder, no layout space, no render —
+  // the browser should never even show it. We (1) display:none the element
+  // (no paint, no layout) and (2) sever its src/srcset so the browser stops
+  // fetching/decoding the image bytes entirely. The original src is remembered
+  // (on a background property, not an attribute we'd fight) so disabling the
+  // setting can restore the image.
   function blockImage(img, result) {
     if (!img || blocked.has(img)) return;
+    if (img.__origSrc === undefined) img.__origSrc = img.src;
     blocked.add(img);
     try { img.setAttribute("data-locallens", result.label); } catch (e) {}
-    // hide the actual image content, preserving its layout space
-    if (img.style) img.style.visibility = "hidden";
-    // reuse a badge element as the blocking placeholder (fixed, over the box)
-    let ph = img.__locallensBadge;
-    if (!ph) {
-      ph = document.createElement("div");
-      ph.className = "locallens-badge";
-      ph.dataset.locallens = "";
-      ph.style.cssText = [
-        "position:fixed", "z-index:2147483647",
-        "background:rgba(40,40,40,0.85)", "color:#fff",
-        "font:600 11px/1.4 -apple-system,Segoe UI,Roboto,sans-serif",
-        "padding:4px 8px", "border-radius:4px", "text-align:center",
-        "pointer-events:none", "box-shadow:0 1px 4px rgba(0,0,0,0.5)",
-      ].join(";");
-      ph.textContent = "🚫 computer-generated";
-      ph.title = `blocked — ${result.label} confidence ${((result.fake || 0) * 100).toFixed(1)}%`;
-      img.__locallensBadge = ph;
-      (document.body || document.documentElement).appendChild(ph);
-    }
-    // Cover the whole image box so it reads as "blocked here"
-    const cover = () => {
-      if (!img.isConnected) { ph.style.display = "none"; return; }
-      const r = img.getBoundingClientRect();
-      if (r && r.width > 0 && r.height > 0) {
-        ph.style.left = r.left + "px";
-        ph.style.top = r.top + "px";
-        ph.style.width = r.width + "px";
-        ph.style.height = r.height + "px";
-        ph.style.display = "flex";
-        ph.style.alignItems = "center";
-        ph.style.justifyContent = "center";
-      } else {
-        ph.style.display = "none";
-      }
-    };
-    cover();
-    ph.__locallensPlace = () => { if (document.hidden || !img.isConnected) { ph.style.display = "none"; return; } cover(); };
-    if (!ph.__locallensBound) {
-      ph.__locallensBound = true;
-      window.addEventListener("scroll", ph.__locallensPlace, { passive: true, capture: true });
-      window.addEventListener("resize", ph.__locallensPlace, { passive: true });
-    }
+    try { img.dataset.locallensBlocked = "1"; } catch (e) {}
+    if (img.style) img.style.display = "none";
+    // stop the browser from fetching/decoding the image bytes — the page now
+    // behaves as if the image was never there (no download, no render).
+    try { img.removeAttribute("srcset"); } catch (e) {}
+    try { img.src = ""; } catch (e) {}
+    try { img.srcs = undefined; } catch (e) {}
     badged.add(img);
+  }
+
+  // Restore an image that was blocked (used when the block setting is turned off).
+  function unblockImage(img) {
+    if (!blocked.has(img)) return;
+    blocked.delete(img);
+    if (img) {
+      if (img.style) img.style.display = "";
+      if (img.__origSrc) img.src = img.__origSrc; // restore the real source
+      try { delete img.dataset.locallensBlocked; } catch (e) {}
+    }
   }
 
   // ---------- processing loop (serialized) ----------
@@ -502,24 +481,16 @@
       if (msg && msg.type === "locallens:block" && typeof msg.value === "boolean") {
         blockFlagged = msg.value;
         if (blockFlagged) {
-          // turn on: immediately block any already-badged computer-generated imgs
+          // turn on: immediately un-render any already-scanned computer-generated imgs
           document.querySelectorAll("img[data-locallens]").forEach((im) => {
             if (im.dataset.locallens === "computer-generated" && !blocked.has(im)) {
-              blocked.add(im);
-              if (im.style) im.style.visibility = "hidden";
-              if (im.__locallensBadge) {
-                im.__locallensBadge.textContent = "🚫 computer-generated";
-                im.__locallensBadge.title = "blocked (from cached verdict)";
-              }
+              blockImage(im, { label: "computer-generated", fake: 1 });
             }
           });
           schedule(); // re-collect + block any not-yet-processed flagged imgs
         } else {
-          // turn off: restore visibility on everything we hid
-          for (const im of blocked) {
-            if (im && im.style) im.style.visibility = "";
-            removeBadge(im);
-          }
+          // turn off: restore every image we severed
+          for (const im of blocked) unblockImage(im);
           blocked = new WeakSet();
         }
         sendResponse({ ok: true });
