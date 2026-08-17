@@ -66,7 +66,45 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     ensureModel().then((s) => sendResponse(s));
     return true;
   }
+  if (msg && msg.type === "locallens:infer") {
+    // Background inference fallback for strict-CSP pages (e.g. reddit.com) where
+    // the page's CSP forbids WebAssembly compilation inside the content-script
+    // world. Routing is done via the offscreen document (a real extension page,
+    // immune to page CSP) because MV3 service workers cannot importScripts the
+    // bundled ORT UMD build. Ensure the offscreen doc exists, then forward.
+    ensureOffscreen()
+      .then(() => chrome.runtime.sendMessage({ type: "locallens:infer", imageUrl: msg.imageUrl, tensor: msg.tensor, dims: msg.dims }))
+      .then((r) => sendResponse(r))
+      .catch((e) => { console.error("[AI Block] offscreen infer failed:", e && e.message || e); sendResponse({ ok: false, error: String((e && e.message) || e) }); });
+    return true; // async
+  }
 });
+
+// ---------------------------------------------------------------------------
+// Offscreen-document inference (fallback for strict-CSP pages). The offscreen
+// document loads onnxruntime-web via a normal <script> tag and runs inference
+// with NO page CSP, so the model always loads regardless of site. The content
+// script does the (canvas-based) preprocessing and ships the ready tensor.
+// ---------------------------------------------------------------------------
+let _offscreenPromise = null;
+
+function ensureOffscreen() {
+  if (_offscreenPromise) return _offscreenPromise;
+  _offscreenPromise = (async () => {
+    if (typeof chrome.offscreen === "undefined") {
+      throw new Error("chrome.offscreen unavailable (needs Chrome 109+ / 'offscreen' permission)");
+    }
+    const has = await chrome.offscreen.hasDocument();
+    if (!has) {
+      await chrome.offscreen.createDocument({
+        url: "offscreen.html",
+        reasons: ["BLOBS"],
+        justification: "Run ONNX Runtime Web wasm inference outside page CSP.",
+      });
+    }
+  })();
+  return _offscreenPromise;
+}
 
 // Keep the service worker alive briefly while large model files are fetched.
 chrome.runtime.onSuspend && chrome.runtime.onSuspend.addListener(() => {});

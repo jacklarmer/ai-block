@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>AI Block QA — Infinite Scroll Image Feed</title>
+<style>
+  body { margin:0; font-family: system-ui; background:#111; color:#ddd; }
+  .feed { max-width: 1000px; margin: 0 auto; }
+  .post { background:#1c1c1c; margin: 14px 0; padding: 12px; border-radius: 8px; }
+  .post-head { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .avatar { width:44px; height:44px; border-radius:50%; background:linear-gradient(#777,#444); }
+  .username { font-size:13px; color:#999; }
+  .card img { width:100%; display:block; border-radius:6px; }
+  .iconbar { font-size:20px; color:#bbb; margin-top:6px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; padding:10px; }
+  .thumb { width:120px; height:120px; object-fit:cover; background:#222; }
+  .small-icon { width:24px; height:24px; }
+  .favicon { width:16px; height:16px; }
+  .logo { width:80px; height:24px; }
+  /* lazy images: only load when near viewport */
+  .lazy { background:#222; }
+  .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:10px; }
+  .grid-item { position:relative; border-radius:8px; overflow:hidden; background:#222; }
+  .grid-item img { width:100%; aspect-ratio:1/1; object-fit:cover; display:block; }
+</style>
+</head>
+<body>
+<div id="fixture">
+  <!-- header avatar/logo cluster (should NEVER be badged) -->
+  <div class="post-head" style="padding:10px">
+    <div class="avatar" id="headerAvatar"></div>
+    <span class="username">@header_user</span>
+    <img class="small-icon" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'><circle cx='12' cy='12' r='12' fill='%23555'/></svg>" alt="icon">
+    <img class="logo" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='24'><rect width='80' height='24' fill='%23c33'/></svg>" alt="logo">
+    <img class="favicon" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16'><rect width='16' height='16' fill='%23333'/></svg>" alt="fav">
+  </div>
+
+  <div id="feed"></div>
+  <div class="grid" id="grid"></div>
+</div>
+<script>
+  // produce deterministic "image" data URIs so we don't need network. Real photos
+  // vs AI-looking noise we can't truly generate here, but we CAN exercise the
+  // scan/collect/badge/block pipeline + lazy-load-on-scroll + avatar filtering.
+  let seed = 0;
+  function noiseImage(seed_, w, h) {
+    // deterministic pseudo-random PNG-ish SVG with varied color to exercise decode
+    const base = 30 + (seed_ % 200);
+    return `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}'><rect width='${w}' height='${h}' fill='rgb(${(base*7)%255},${(base*13)%255},${(base*29)%255})'/><circle cx='${w/2}' cy='${h/2}' r='${(seed_%40)+10}' fill='rgb(${255-(base*7)%255},${(base*5)%255},${(base*17)%255})'/></svg>`;
+  }
+  const avatars = ["data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44'><rect width='44' height='44' fill='%23777'/></svg>"];
+
+  let postCount = 0;
+  function addPost(n) {
+    const post = document.createElement("div");
+    post.className = "post";
+    post.innerHTML = `
+      <div class="post-head">
+        <img class="avatar" data-lazy="true" src="${avatars[0]}" width="44" height="44" alt="avatar">
+        <span class="username">user_${n}</span>
+      </div>
+      <div class="card">
+        <img class="post-img lazy" data-src="${noiseImage(seed++, 800, 500)}" alt="post ${n}">
+      </div>
+      <div class="iconbar">👍 12  💬 3  🔁 ${n}</div>`;
+    document.getElementById("feed").appendChild(post);
+  }
+  function addGridItem(n) {
+    const it = document.createElement("div");
+    it.className = "grid-item";
+    it.innerHTML = `<img class="grid-img lazy" data-src="${noiseImage(seed++, 300, 300)}" alt="grid ${n}">`;
+    document.getElementById("grid").appendChild(it);
+  }
+
+  // pre-seed feed + grid
+  for (let i = 0; i < 8; i++) addPost(i);
+  for (let i = 0; i < 9; i++) addGridItem(i);
+
+  // infinite scroll: append more posts/grid as the user scrolls toward bottom
+  let scrolled = false;
+  window.addEventListener("scroll", () => {
+    const doc = document.documentElement;
+    if (doc.scrollTop + innerHeight > doc.scrollHeight - 1200) {
+      if (!scrolled) {
+        scrolled = true;
+        for (let i = 0; i < 6; i++) addPost(postCount + i);
+        for (let i = 0; i < 9; i++) addGridItem(postCount + i);
+        // lazy-load: promote data-src -> src for imgs near viewport
+        document.querySelectorAll("img.lazy[data-src]").forEach((img) => {
+          const r = img.getBoundingClientRect();
+          if (r.top < innerHeight + 400 && r.bottom > -400) {
+            img.src = img.dataset.src;
+            img.removeAttribute("data-src");
+          }
+        });
+        setTimeout(() => { scrolled = false; }, 800);
+      }
+    }
+  });
+
+  // initial lazy promotion for the first viewport
+  document.querySelectorAll("img.lazy[data-src]").forEach((img) => {
+    if (img.getBoundingClientRect().top < innerHeight + 400) {
+      img.src = img.dataset.src;
+      img.removeAttribute("data-src");
+    }
+  });
+</script>
+</body>
+</html>

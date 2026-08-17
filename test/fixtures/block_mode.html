@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>AI Block QA — Block Mode Card Removal</title>
+<style>
+  body { margin:0; font-family:system-ui; background:#111; color:#ddd; }
+  .feed { max-width:760px; margin:0 auto; padding:20px; }
+  .post { background:#1c1c1c; margin:16px 0; padding:12px; border-radius:8px; }
+  .card img { width:100%; display:block; border-radius:6px; }
+  .cap { font-size:12px; color:#888; margin-top:6px; }
+  .icon { width:20px; height:20px; }
+</style>
+</head>
+<body>
+<div class="feed">
+  <!-- CARD A: an AI image (flux_0, fake=0.977) -> block mode should REMOVE this whole .post -->
+  <div class="post" id="cardAI">
+    <div class="card"><img src="/samples/fake/flux_0.jpg" alt="ai image"></div>
+    <div class="cap">caption A</div>
+  </div>
+  <!-- CARD B: an AI image (flux_1, fake=0.902) -> should ALSO be removed -->
+  <div class="post" id="cardAI2">
+    <div class="card"><img src="/samples/fake/flux_1.jpg" alt="ai image 2"></div>
+    <div class="cap">caption B</div>
+  </div>
+  <!-- CARD C: a REAL image (afhq, fake~0.02) -> should STAY + get a ✅ badge -->
+  <div class="post" id="cardReal">
+    <div class="card"><img src="/samples/real/afhq_0.jpg" alt="real image"></div>
+    <div class="cap">caption C</div>
+  </div>
+  <!-- CARD D: another real (afhq_1) -> should STAY -->
+  <div class="post" id="cardReal2">
+    <div class="card"><img src="/samples/real/afhq_1.jpg" alt="real image 2"></div>
+    <div class="cap">caption D</div>
+  </div>
+  <!-- small icons near cards: should NEVER be removed or badged -->
+  <img class="icon" src="/samples/real/afhq_2.jpg" alt="icon-ish" style="width:20px;height:20px">
+</div>
+</body>
+</html>

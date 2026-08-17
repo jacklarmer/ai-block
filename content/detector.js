@@ -48,13 +48,27 @@
       if (!ort) {
         throw new Error("onnxruntime-web not loaded");
       }
-      ort.env.wasm.wasmPaths = WASM_DIRS;
-      // Content scripts on ordinary pages (e.g. twitter.com) do NOT get COOP/COEP
-      // cross-origin-isolation headers, so SharedArrayBuffer is unavailable and the
-      // threaded wasm build cannot initialize. Force single-thread execution — a
-      // fully in-browser, CPU-only path that needs no SharedArrayBuffer and works
-      // on any page. (Per-image cost stays tiny.)
-      ort.env.wasm.numThreads = 1;
+      ort.env.wasm.numThreads = 1; // see note below
+      // Strict-CSP sites (e.g. reddit.com) block ORT's own `fetch()` /
+      // instantiateStreaming() of the .wasm from the page world, so on those
+      // pages the model silently never loads. Fix: pre-fetch the required wasm
+      // bytes OURSELVES (extension origin, immune to page CSP) and hand them to
+      // ORT in-memory via wasmPaths as a byte map. ORT then compiles the bytes
+      // directly instead of issuing a CSP-governed fetch.
+      const needed = ["ort-wasm-simd-threaded.wasm"];
+      const loaded = {};
+      const results = await Promise.allSettled(
+        needed.map((f) => fetch(WASM_DIRS + f, { credentials: "omit" }).then((r) => r.arrayBuffer()))
+      );
+      results.forEach((res, i) => {
+        if (res.status === "fulfilled") loaded[needed[i]] = res.value;
+      });
+      if (Object.keys(loaded).length) {
+        ort.env.wasm.wasmPaths = loaded;
+      } else {
+        // fallback: let ORT try its normal path (works on non-CSP pages)
+        ort.env.wasm.wasmPaths = WASM_DIRS;
+      }
     }
     return ort;
   }
@@ -135,48 +149,65 @@
   // Run inference on an ImageBitmap / HTMLImageElement / canvas-sourced image.
   // Returns { fake: <0..1>, real: <0..1>, label: "computer-generated"|"Real", ms }
   async function detect(img, opts = {}) {
-    const o = await initOrt();
-    const session = await loadSession(opts.forceReload);
+    // Prefer the in-page ORT path (fast, no message round-trip). On strict-CSP
+    // pages (e.g. reddit.com) the page forbids WebAssembly compilation in the
+    // content-script world, so the in-page session cannot initialize; the
+    // offscreen-document fallback runs outside page CSP. We also fall back when
+    // a cross-origin image taints the content-script canvas (can't read pixels).
+    const o = await initOrt().catch(() => null);
+    if (o) {
+      try {
+        const session = await loadSession(opts.forceReload);
+        const input = preprocess(img);
+        return await runInPage(o, session, input);
+      } catch (e) {
+        // fall through to offscreen path
+      }
+    }
+    return workerInfer(img, opts);
+  }
 
-    const input = preprocess(img);
+  async function runInPage(o, session, input) {
     const feeds = {};
     feeds[input.name] = new o.Tensor(input.type, input.data, input.dims);
-
     const t0 = performance.now();
     const results = await session.run(feeds);
     const ms = performance.now() - t0;
-
-    // Find the output tensor — grab by common names, else the first.
     let out = results[session.outputNames[0]] || results["output"] || results["logits"];
-    if (!out && typeof results === "object") {
-      const keys = Object.keys(results);
-      if (keys.length) out = results[keys[0]];
-    }
+    if (!out && typeof results === "object") { const ks = Object.keys(results); if (ks.length) out = results[ks[0]]; }
     const vals = Array.from(out.data);
-    // Model outputs 2-class logits -> softmax to get calibrated probabilities.
-    // index 1 = "fake" (computer-generated).
+    // Model outputs 2-class logits -> stable softmax. index 1 = fake.
     let p0, p1;
     if (vals.length >= 2) {
-      // numerically stable softmax over the two logits
       const m = Math.max(vals[0], vals[1]);
-      const e0 = Math.exp(vals[0] - m);
-      const e1 = Math.exp(vals[1] - m);
-      const s = e0 + e1;
-      p0 = e0 / s;
-      p1 = e1 / s;
+      const e0 = Math.exp(vals[0] - m), e1 = Math.exp(vals[1] - m), s = e0 + e1;
+      p0 = e0 / s; p1 = e1 / s;
+    } else { p1 = vals[0]; p0 = 1 - p1; }
+    return { fake: p1, real: p0, label: p1 >= 0.5 ? "computer-generated" : "Real", ms: Math.round(ms), modelVersion: MODEL_VERSION, via: "inline" };
+  }
+
+  // Fallback inference in the offscreen document (extension context, immune to
+  // page CSP AND CORS-read restrictions via host permission). For http(s)/data
+  // images we pass the URL and let the offscreen fetch+decode+preprocess+infer,
+  // which sidesteps canvas-taint entirely. Only blob: (page-scoped) URLs need
+  // the preprocessed tensor sent over.
+  async function workerInfer(img, opts) {
+    // Prefer the original <img> element (carries the real URL) when provided;
+    // fall back to whatever image-like object we were handed.
+    const src = (opts && opts.original) || img;
+    const url = (src && (src.currentSrc || src.src)) || "";
+    let payload;
+    if (/^(https?:|data:)/i.test(url)) {
+      payload = { imageUrl: url };
     } else {
-      p1 = vals[0];
-      p0 = 1 - vals[0];
+      const input = preprocess(img); // blob: decode fine in-page (no taint)
+      payload = { tensor: input.data, dims: input.dims };
     }
-    const fake = p1;
-    const real = p0;
-    return {
-      fake: fake,
-      real: real,
-      label: fake >= 0.5 ? "computer-generated" : "Real",
-      ms: Math.round(ms),
-      modelVersion: MODEL_VERSION,
-    };
+    const resp = await chrome.runtime.sendMessage({ type: "locallens:infer", ...payload });
+    if (!resp || !resp.ok) {
+      throw new Error("inference failed (inline + offscreen): " + ((resp && resp.error) || "no response"));
+    }
+    return { fake: resp.fake, real: resp.real, label: resp.fake >= 0.5 ? "computer-generated" : "Real", ms: -1, modelVersion: MODEL_VERSION, via: "offscreen" };
   }
 
   global.LocalLensDetector = {

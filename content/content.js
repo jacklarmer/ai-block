@@ -35,7 +35,7 @@
   let badgeStyle = {};
   let periodicTimer = null;
   const PERIOD_MS = 1200; // paced re-check so scroll-lazy images are never missed
-  const badged = new WeakSet(); // images we have placed a badge for (for cleanup)
+  const badged = new Set(); // images we have placed a badge for (for cleanup) — a Set, NOT WeakSet, because we iterate it
   let blocked = new WeakSet(); // images we have hidden (block-flag mode)
   // Session-scoped URL -> result cache: avoids re-running the model on images
   // that reappear (new <img> node, same URL — common in scroll/SPA layouts).
@@ -273,6 +273,7 @@
       b.remove();
       img.__locallensBadge = null;
     }
+    if (img) badged.delete(img); // stop tracking so we don't hold dead refs
   }
 
   // OPT-IN "block" mode: remove a computer-generated image — and the result
@@ -355,13 +356,13 @@
   }
 
   async function process() {
+    // Warm the in-page detector session (best-effort). On strict-CSP pages the
+    // in-page wasm session can't build; that's fine — detect() falls back to
+    // background-SW inference, so we must NOT bail the loop here.
     try {
-      // warm the detector session once
-      await LocalLensDetector.loadSession();
+      await LocalLensDetector.loadSession().catch(() => {});
     } catch (e) {
-      console.error("[AI Block] model load failed:", e);
-      running = false;
-      return;
+      /* non-fatal: worker inference fallback covers it */
     }
 
     while (enabled) {
@@ -440,7 +441,7 @@
           dbg.skipped++;
           continue;
         }
-        const result = await LocalLensDetector.detect(loaded, {});
+        const result = await LocalLensDetector.detect(loaded, { original: img });
         dbg.detected++;
         if (result.label === "computer-generated" && result.fake < threshold) {
           // below threshold -> treat as real/unflagged but still show soft badge
@@ -490,7 +491,7 @@
               try { loaded = await createImageBitmap(im); } catch (e) { loaded = im; }
             }
             if (!loaded) { scanned.add(im); continue; }
-            const res = await LocalLensDetector.detect(loaded, {});
+            const res = await LocalLensDetector.detect(loaded, { original: im });
             dbg.detected++;
             if (res.label === "computer-generated" && res.fake < threshold) res.label = "Real";
             if (blockFlagged && res.label === "computer-generated") blockImage(im, res);

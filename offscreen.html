@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>AI Block — inference worker</title>
+</head>
+<body>
+<!-- Offscreen document: runs ONNX Runtime Web in a real (hidden) extension
+     document, immune to any page's Content-Security-Policy. This is where
+     inference happens for strict-CSP sites (e.g. reddit.com) where the page
+     forbids WebAssembly compilation in the content-script world. -->
+<script src="lib/ort.all.min.js"></script>
+<script src="offscreen.js"></script>
+</body>
+</html>

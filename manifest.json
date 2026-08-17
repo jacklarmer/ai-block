@@ -1,10 +1,13 @@
 {
   "manifest_version": 3,
   "name": "AI Block — Block Computer-Generated Images",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "description": "AI Block detects and blocks computer-generated (AI) images entirely in your browser using WebGPU. No cloud, no uploads, private by design.",
   "minimum_chrome_version": "113",
-  "permissions": ["storage", "activeTab", "scripting"],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "permissions": ["storage", "activeTab", "scripting", "offscreen"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
@@ -27,7 +30,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["lib/*.wasm", "lib/*.mjs", "model/*.onnx", "model/*.onnx.gz"],
+      "resources": ["lib/*.js", "lib/*.wasm", "lib/*.mjs", "model/*.onnx", "model/*.onnx.gz"],
       "matches": ["<all_urls>"]
     }
   ],
