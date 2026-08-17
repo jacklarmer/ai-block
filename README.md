@@ -1,4 +1,12 @@
-# AI Block — Local Computer Image Detector (Chrome MV3)
+# AI Block
+
+Logo: the **🤖 robot emoji**. Regenerate the toolbar/extension icons with
+`node test/make_icon_emoji.js` (renders the emoji via Chrome canvas at
+16/48/128).
+
+A Chrome MV3 extension that detects **computer-generated (AI) images** entirely
+on-device — **in your browser** — and badges them with ❌/✅, with an optional
+"block" mode that removes them (and the post/card they sit in) from the page.
 
 Detects computer-generated images (AI) **entirely in your browser** using WebGPU.
 No cloud, no server, no uploads — every inference runs locally on your device.
