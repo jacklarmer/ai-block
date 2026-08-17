@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# v15 fine-tune: add 7,500 FRESH, oracle-deduped ImageNet real photos (shards
+# 00023-00025, never used — v13 used 00-02/48-51, v14 used 20-22) to the real
+# class, from the v14 checkpoint. Goal: cut the truly-unseen hard-subtype real
+# FP below v14's 42.4% while holding AI recall. Uses the EXACT training
+# transform for every eval. Production-lane guard pins training to the RTX 5090
+# (PCI 0000:01:00.0) — never the PRO 6000.
+set -uo pipefail
+cd ~/aidet
+source .venv/bin/activate
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+export CUDA_VISIBLE_DEVICES=0000:01:00.0
+# hard-reject if the PRO 6000 production lane is somehow the only CUDA device
+if ! nvidia-smi -L | grep -q "5090"; then
+  echo "ABORT: no RTX 5090 visible to training"; exit 1
+fi
+exec >> v15_pipeline.log 2>&1
+echo "=== v15 pipeline start $(date) ==="
+echo "=== build_v15 (fresh shards 00023-00025) ==="
+python build_v15.py data_v15_more data_unseen/real_eval 7500 2>&1 | tail -8
+echo "=== train_v15 (from run_v14/best.pt) ==="
+python train_v4.py --root data_v15/train --ckpt run_v14/best.pt --out run_v15 --epochs 8 --batch 80 2>&1 | grep -E "^ep[0-9]|BEST" | tail -10
+echo "=== export v15 ==="
+python export_onnx.py --ckpt run_v15/best.pt --out model/v15_detector.onnx 2>&1 | grep -E "fp16 size|exported" | tail -2
+echo "=== KEY: FRESH unseen real val (never trained) FP @ EXACT transform ==="
+python - <<PY 2>&1 | grep -vE "RuntimeWarning|Warning" | tail -8
+import onnxruntime as ort, numpy as np, glob
+from PIL import Image
+import torchvision.transforms as T
+tf=T.Compose([T.Resize(288),T.CenterCrop(256),T.ToTensor(),T.Normalize([0.485,0.456,0.406],[0.229,0.224,0.225])])
+def fp(model, pattern, thr=0.5):
+    sess=ort.InferenceSession(model); fs=glob.glob(pattern); tot=fp=0
+    for f in fs:
+        try:
+            x=tf(Image.open(f).convert("RGB")).unsqueeze(0).numpy()
+            p=np.exp(sess.run(None,{"input":x})[0][0]); p=p/p.sum(); tot+=1
+            if p[1]>=thr: fp+=1
+        except: pass
+    return f"{fp/tot:.4f} ({fp}/{tot})"
+print("  v15 unseen-real FP@0.5:", fp("model/v15_detector_fp16.onnx","data_v15/test/real_unseen/*.jpg"))
+print("  v15 unseen-real FP@0.65:", fp("model/v15_detector_fp16.onnx","data_v15/test/real_unseen/*.jpg",0.65))
+print("  v14 reference FP@0.5:", fp("model/v14_detector_fp16.onnx","data_v15/test/real_unseen/*.jpg"))
+PY
+echo "=== eval: per-generator AI-recall + held-out real spec ==="
+for d in deepfake frontier dalle3 midjourney ideogram; do
+  echo "----- $d -----"
+  python eval_aid.py --real-dir data_v9/test/real --fake-dir "data_v9/test/fake/$d" --onnx model/v15_detector_fp16.onnx 2>&1 | grep -iE "balanced acc" | tail -1
+done
+echo "=== v15 pipeline DONE $(date) ==="

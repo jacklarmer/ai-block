@@ -113,6 +113,18 @@ build_v13.py, v13_pipeline.sh, gather_v14.sh, build_v14.py, v14_pipeline.sh)
 form the audit trail for how the hard-subtype gap was found and progressively
 narrowed.
 
+> **v15 candidacy — tested and DISCARDED (kept v14).** The next cycle gathered
+> 7,500 more fresh, never-trained ImageNet real photos (shards 00023–00025,
+> content-hash-deduped against the 1500 unseen oracle, 0 overlaps), retrained as
+> v15 from the v14 checkpoint, and gated with the exact shipped transform. It
+> **regressed** the primary objective: unseen-hard FP@0.5 went **42.4% → 43.9%**
+> (658/1500 vs 636/1500), with AI recall flat (deepfake 0.998, frontier 0.928).
+> **v15 was NOT shipped** — the real-diversity lever has plateaued/diminishing
+> returns after v12→v14, so v14 remains the deployed model. The full
+> gather/build/train/gate for this negative result is committed in `evaluation/`
+> (gather_v15.sh, build_v15.py, v15_pipeline.sh, v15_gate.sh) so the attempt is
+> reproducible and future cycles don't blindly repeat the same lever.
+
 > **Single deterministic center-crop (no TTA).** We measured that a 5-crop x
 > 2-flip test-time augmentation *hurts* balanced accuracy on the held-out set
 > (0.887 vs 0.921) by diluting the calibrated center-crop signal, so the

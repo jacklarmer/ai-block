@@ -39,8 +39,23 @@
   let blocked = new WeakSet(); // images we have hidden (block-flag mode)
   // Session-scoped URL -> result cache: avoids re-running the model on images
   // that reappear (new <img> node, same URL — common in scroll/SPA layouts).
+  // Bounded: on infinite feeds / long sessions we may see many thousands of
+  // unique image URLs; keeping every one forever is an unbounded memory leak.
+  // We cap the cache and evict oldest entries (FIFO) once it exceeds the limit.
   const resultCache = new Map();
+  const MAX_RESULT_CACHE = 2048; // ~2k cached verdicts is plenty for any session
   const cacheUrl = (img) => (img.currentSrc || img.src || "").split("#")[0];
+  // Inserts/updates a URL -> verdict mapping, enforcing the FIFO size cap so a
+  // long scroll/SPA session cannot grow the cache without bound.
+  function cacheSet(key, value) {
+    if (resultCache.has(key)) resultCache.delete(key); // refresh recency, keep FIFO fair
+    resultCache.set(key, value);
+    while (resultCache.size > MAX_RESULT_CACHE) {
+      const oldest = resultCache.keys().next().value;
+      if (oldest === undefined) break;
+      resultCache.delete(oldest);
+    }
+  }
 
   // ---------- settings ----------
   function loadSettings() {
@@ -210,13 +225,27 @@
       badge.style.background = color;
     }
 
-    // Position the fixed badge over the img's current on-screen box.
+    // Position the fixed badge over the img's current on-screen box, clamped to
+    // stay fully inside the viewport so it never overflows off-screen (which
+    // would cause it to be cut off and/or widen the page). The badge is small
+    // but a corner image can put its top-left near the right/bottom edge, so we
+    // nudge inward by the badge's own size when needed.
     const place = () => {
       if (!img.isConnected) return;
       const r = img.getBoundingClientRect();
       if (r && (r.width > 0 && r.height > 0)) {
-        badge.style.left = (r.left + 4) + "px";
-        badge.style.top = (r.top + 4) + "px";
+        const vw = window.innerWidth || document.documentElement.clientWidth;
+        const vh = window.innerHeight || document.documentElement.clientHeight;
+        const bw = badge.offsetWidth || 96;
+        const bh = badge.offsetHeight || 20;
+        let left = r.left + 4;
+        let top = r.top + 4;
+        if (left + bw > vw - 2) left = Math.max(2, vw - bw - 2);   // keep inside right edge
+        if (left < 2) left = 2;
+        if (top + bh > vh - 2) top = Math.max(2, vh - bh - 2);     // keep inside bottom edge
+        if (top < 2) top = 2;
+        badge.style.left = left + "px";
+        badge.style.top = top + "px";
         badge.style.display = "block";
       } else {
         badge.style.display = "none"; // off-screen / not laid out
@@ -420,7 +449,7 @@
           drawBadge(img, result);
         }
         dbg.badged++;
-        try { if (ckey) resultCache.set(ckey, { fake: result.fake, real: result.real, label: result.label }); } catch (e) {}
+        try { if (ckey) cacheSet(ckey, { fake: result.fake, real: result.real, label: result.label }); } catch (e) {}
         if (img.__locallensBmp) {
           img.__locallensBmp.close();
           img.__locallensBmp = null;
