@@ -253,12 +253,13 @@
     };
     place();
     // Keep it tracking the image as the user scrolls / resizes / lazy-loads.
+    // NOTE: badges are NOT given their own scroll/resize listeners. Positioning is
+    // driven by a SINGLE global scroll+resize handler (startObserver) that calls
+    // repositionBadges() on every live badge — so on image-heavy feeds (Google
+    // Images, X, infinite scroll) we hold O(1) window listeners instead of one per
+    // image. Each badge still exposes __locallensPlace so the global handler (and
+    // the periodic tick) can move it with the image's current bounding box.
     badge.__locallensPlace = () => { if (document.hidden || !img.isConnected) { badge.style.display = "none"; return; } place(); };
-    if (!badge.__locallensBound) {
-      badge.__locallensBound = true;
-      window.addEventListener("scroll", badge.__locallensPlace, { passive: true, capture: true });
-      window.addEventListener("resize", badge.__locallensPlace, { passive: true });
-    }
   }
 
   // Remove this image's badge (used when an image is removed from the page, or
@@ -266,10 +267,9 @@
   function removeBadge(img) {
     const b = img && img.__locallensBadge;
     if (b) {
-      if (b.__locallensBound) {
-        window.removeEventListener("scroll", b.__locallensPlace, { capture: true });
-        window.removeEventListener("resize", b.__locallensPlace);
-      }
+      // No per-badge window listeners to remove — positioning is handled by the
+      // single global scroll/resize handler + periodic tick, both of which skip
+      // this short-lived element as soon as it's gone from the DOM.
       b.remove();
       img.__locallensBadge = null;
     }
@@ -629,6 +629,14 @@
         } catch (e) {}
       }
     } catch (e) {}
+    // SINGLE global scroll/resize handler that repositions every live badge off
+    // its image's current bounding box. This replaces the old one-scroll-listener-
+    // per-badge design (O(1) window listeners instead of O(images)), and also
+    // catches layout shifts that happen with no user scroll (capture:true so it
+    // fires even when the page itself pauses propagation). passive:true keeps it
+    // off the critical path so it never blocks scrolling.
+    window.addEventListener("scroll", () => repositionBadges(), { passive: true, capture: true });
+    window.addEventListener("resize", () => repositionBadges(), { passive: true });
     startPeriodic();
   }
 

@@ -1,6 +1,6 @@
 {
   "name": "ai-block",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "description": "AI Block — private, in-browser computer-generated (AI) image detector Chrome MV3 extension (WebGPU/WASM). No cloud, no server, no uploads.",
   "license": "MIT",
   "private": true,

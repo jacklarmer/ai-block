@@ -35,6 +35,10 @@ extension is fully offline.
    result-cache as a fallback, so live threshold updates keep working even
    after the cache evicts older entries on very long sessions), so you can tune
    sensitivity live.
+   Badges are positioned/kept in sync with their image by a **single** global
+   scroll+resize handler (O(1) window listeners, not one per image), so heavy
+   image feeds (Google Images, X, infinite scroll) stay responsive as badges
+   track lazy-loading images and layout shifts.
    (Optional "block" mode — enabled from the popup — removes computer-generated
    images AND the post/result card they sit in from the page entirely: the item
    vanishes from the grid/feed as if it was never fetched. Scroll-lazy images
