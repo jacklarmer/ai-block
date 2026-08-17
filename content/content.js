@@ -304,6 +304,11 @@
       if (img.style) img.style.display = "";
       if (img.__origSrc && img.src !== img.__origSrc) img.src = img.__origSrc;
       try { delete img.dataset.locallensBlocked; } catch (e) {}
+      // Reflect the restored real/unflagged state on the attribute so a later
+      // block toggle re-enable (which re-scans img[data-locallens]) does not
+      // wrongly re-block an image the user (or a threshold change) just
+      // unblocked.
+      try { img.setAttribute("data-locallens", "Real"); } catch (e) {}
     }
   }
 
@@ -640,6 +645,29 @@
       }
       if (msg && msg.type === "locallens:threshold" && typeof msg.value === "number") {
         threshold = msg.value;
+        // Re-apply the new threshold to every image we've already classified,
+        // using the cached softmax result (no re-inference needed). Previously
+        // a threshold change did nothing to images already on the page: they
+        // were marked `data-locallens` and skipped by collectImages, so the
+        // slider only affected future images. Since we keep the full
+        // probability in the resultCache, re-deriving each verdict is instant.
+        if (enabled) {
+          for (const im of badged) {
+            if (!im.isConnected) continue;
+            const ckey = cacheUrl(im);
+            const res = ckey && resultCache.get(ckey);
+            if (!res || res.fake == null) continue;
+            const verdict = res.fake >= threshold ? "computer-generated" : "Real";
+            const redrawn = Object.assign({}, res, { label: verdict });
+            if (blockFlagged && verdict === "computer-generated" && !blocked.has(im)) {
+              blockImage(im, redrawn);
+            } else if (blockFlagged && verdict !== "computer-generated" && blocked.has(im)) {
+              unblockImage(im);
+            } else if (!blockFlagged) {
+              drawBadge(im, redrawn);
+            }
+          }
+        }
         if (enabled && !running) schedule();
         sendResponse({ ok: true });
         return false;

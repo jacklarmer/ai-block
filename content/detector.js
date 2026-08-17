@@ -29,7 +29,11 @@
   const WASM_DIRS = (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.getURL)
     ? chrome.runtime.getURL("lib/")
     : "/lib/";
-  const MODEL_VERSION = "locallens-v1";
+  // Model build tag for the bytes actually bundled as model/detector.onnx.
+  // Keep in sync with background.js MODEL_VERSION / README Metrics. This is
+  // surfaced on each detect() result for debugging only — the popup reads the
+  // authoritative version string from background.js.
+  const MODEL_VERSION = "v14 · fresh real diversity";
 
   let sessionPromise = null;
   let ort = null;
