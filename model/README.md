@@ -45,6 +45,21 @@ never trained on:
 > Closing the residual hard-subtype false positive is the active next problem; we
 > report it plainly rather than bury it.
 
+> **v16 candidacy — tested and DISCARDED (kept v14).** The v15 run had a broken
+> data build (a stale `data_v15` tree crashed `build_v15.py` with FileExistsError;
+> training then ran on a mixed/incomplete set), so v16 was a *clean retest* of the
+> fresh-ImageNet-real lever. It fixed the build bug (build into a fresh OUT,
+> hard-refuse stale trees), gathered a further **7,500 fresh, never-trained
+> ImageNet real photos (shards 00026–00028, 0 oracle overlaps)**, fine-tuned v16
+> from the v14 checkpoint, and gated with the exact shipped transform. The clean
+> result **confirms the plateau is real, not a build artifact**: unseen-hard FP@0.5
+> REGRESSED **42.4% → 46.5%** (698/1500 vs 636/1500), with AI recall flat
+> (deepfake 0.995, frontier 0.922). **v16 was NOT shipped** — adding yet more
+> ImageNet real photos no longer helps (and now mildly overfits toward the
+> ImageNet-look at the expense of the harder real subtypes), so **v14 remains the
+> deployed model**. Scripts committed in `evaluation/` (gather_v16.sh,
+> build_v16.py, v16_pipeline.sh).
+
 ## Files
 
 | file                 | size  | role                                   |

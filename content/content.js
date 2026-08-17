@@ -308,6 +308,11 @@
     blocked.add(img);
     try { img.setAttribute("data-locallens", result.label); } catch (e) {}
     try { img.dataset.locallensBlocked = "1"; } catch (e) {}
+    // Retain the verdict on the element so live threshold re-application works
+    // even after the session-scoped resultCache evicts this URL (same contract
+    // as drawBadge). Previously blocked images had no __locallensResult and, on
+    // a long session, could silently stop responding to threshold/slider drags.
+    img.__locallensResult = result;
     if (document.body) {
       const card = findResultContainer(img);
       try { card && card.remove(); } catch (e) {}
@@ -683,8 +688,16 @@
         if (enabled) {
           for (const im of badged) {
             if (!im.isConnected) continue;
-            const ckey = cacheUrl(im);
-            const res = ckey && resultCache.get(ckey);
+            // Prefer the full result we keep on the img element itself
+            // (set in drawBadge) — it always reflects this image's verdict
+            // regardless of whether the session-scoped resultCache has since
+            // evicted the URL (FIFO cap on very long scroll/SPA sessions).
+            // Falling back to the cache is only a safety net.
+            let res = im.__locallensResult;
+            if (!res || res.fake == null) {
+              const ckey = cacheUrl(im);
+              res = ckey && resultCache.get(ckey);
+            }
             if (!res || res.fake == null) continue;
             const verdict = res.fake >= threshold ? "computer-generated" : "Real";
             const redrawn = Object.assign({}, res, { label: verdict });

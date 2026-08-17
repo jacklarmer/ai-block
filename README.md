@@ -23,7 +23,10 @@ extension is fully offline.
    favicons, avatars, logos, thumbnails and emoji are skipped automatically.
    Adjusting the confidence threshold in the popup re-applies instantly to
    images already on the page (no reload, no re-inference — verdicts are
-   re-derived from the cached model output), so you can tune sensitivity live.
+   re-derived from the verdict retained on each image, with the bounded URL
+   result-cache as a fallback, so live threshold updates keep working even
+   after the cache evicts older entries on very long sessions), so you can tune
+   sensitivity live.
    (Optional "block" mode — enabled from the popup — removes computer-generated
    images AND the post/result card they sit in from the page entirely: the item
    vanishes from the grid/feed as if it was never fetched. Scroll-lazy images
@@ -124,6 +127,17 @@ narrowed.
 > gather/build/train/gate for this negative result is committed in `evaluation/`
 > (gather_v15.sh, build_v15.py, v15_pipeline.sh, v15_gate.sh) so the attempt is
 > reproducible and future cycles don't blindly repeat the same lever.
+
+> **v16 candidacy — tested and DISCARDED (kept v14).** Because the v15 run had a
+> broken data build (a stale `data_v15` tree crashed `build_v15.py`; training ran
+> on a mixed/incomplete set), v16 was a *clean retest*: it fixed the build bug
+> (fresh OUT, hard-refuse stale trees), gathered **7,500 more fresh, never-trained
+> ImageNet real photos (shards 00026–00028, 0 oracle overlaps)**, fine-tuned from
+> the v14 checkpoint, and gated with the exact shipped transform. The clean result
+> **confirms the plateau is real**: unseen-hard FP@0.5 REGRESSED **42.4% → 46.5%**
+> (698/1500 vs 636/1500, AI recall flat: deepfake 0.995, frontier 0.922). **v16 was
+> NOT shipped** — v14 remains deployed; scripts committed in `evaluation/`
+> (gather_v16.sh, build_v16.py, v16_pipeline.sh).
 
 > **Single deterministic center-crop (no TTA).** We measured that a 5-crop x
 > 2-flip test-time augmentation *hurts* balanced accuracy on the held-out set
