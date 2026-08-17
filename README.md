@@ -19,6 +19,8 @@ extension is fully offline.
 4. A small corner tag shows the verdict as an emoji — ❌ (computer-generated)
    or ✅ (real) — with the confidence % (the % can be toggled off in the popup;
    the ❌/✅ always shows, and hovering any badge reveals the exact confidence).
+   Badges are only drawn on **actual content images** (photos/artwork) — icons,
+   favicons, avatars, logos, thumbnails and emoji are skipped automatically.
    (Optional "block" mode — enabled from the popup — removes computer-generated
    images AND the post/result card they sit in from the page entirely: the item
    vanishes from the grid/feed as if it was never fetched. Scroll-lazy images
