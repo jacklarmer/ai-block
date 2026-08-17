@@ -46,6 +46,14 @@ node test/batch_qa.js "https://en.wikipedia.org/wiki/Cat" "https://www.bbc.com/n
 - No console / page errors and no unhandled rejections from the *extension*
   (site/3rd-party ad noise is reported but not a failure)
 
+## Unit tests (no browser needed)
+
+- `test/is_too_small.test.js` — regression test for the image-harvesting size
+  predicate (`isTooSmall`) extracted from `content/content.js`. Verifies that a
+  lazy-loaded image collected before it has decoded (natural size still 0) is
+  not mistaken for a tiny icon and permanently skipped, while genuinely tiny
+  decoded icons/favicons still are. Run: `node test/is_too_small.test.js`
+
 ## Fixtures
 
 - `test/fixtures/infinite_scroll.html` — deterministic infinite-scroll feed with

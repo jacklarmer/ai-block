@@ -89,8 +89,16 @@
     if (w > 0 && h > 0 && w < MIN_RENDERED && h < MIN_RENDERED) return true;
     // on-screen area too small -> a small thing we're not really "looking at".
     if (w > 0 && h > 0 && (w * h) < MIN_CONTENT_AREA) return true;
-    // intrinsic tiny image (e.g. a real 32x32 favicon)
-    if ((img.naturalWidth || 0) * (img.naturalHeight || 0) < MIN_IMG_AREA) return true;
+    // intrinsic tiny image (e.g. a real 32x32 favicon) — but ONLY judge this
+    // once the image has actually DECODED. A lazy-loaded image that hasn't been
+    // fetched yet reports naturalWidth=0; treating that as "intrinsically tiny"
+    // would permanently skip a large real photo that simply hasn't loaded (a
+    // "too small" verdict adds it to `scanned`, which is never revisited). By
+    // gating on `img.complete` we defer the size judgment until decode succeeds;
+    // the processing loop's fetch+createImageBitmap step then classifies it with
+    // its real dimensions. Genuine tiny icons/favicons are still caught once
+    // decoded, and icon/avatar containers are filtered by isIconic regardless.
+    if (img.complete && (img.naturalWidth || 0) * (img.naturalHeight || 0) < MIN_IMG_AREA) return true;
     return false;
   }
   // True for images that read as icons/avatars/logos/emoji by their container

@@ -43,6 +43,11 @@ extension is fully offline.
    images AND the post/result card they sit in from the page entirely: the item
    vanishes from the grid/feed as if it was never fetched. Scroll-lazy images
    on Google Images / infinite feeds are caught via an IntersectionObserver.)
+   A lazy-loaded image that is collected *before it has decoded* (natural size
+   still 0) is no longer mistaken for a tiny icon and permanently skipped — the
+   intrinsic-size check is gated on `img.complete`, so a large real photo that
+   is mid-load still gets classified with its real dimensions once fetched.
+   (Covered by `test/is_too_small.test.js`.)
 
 Every image is classified by a learned model that was trained on a diverse
 multi-generator corpus (SDXL, Stable Diffusion, Midjourney, BigGAN, ADM, glide,
