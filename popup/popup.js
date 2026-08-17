@@ -5,6 +5,7 @@ const els = {
   modelVersion: document.getElementById("modelVersion"),
   enabled: document.getElementById("enabled"),
   blockFlagged: document.getElementById("blockFlagged"),
+  showPercent: document.getElementById("showPercent"),
   threshold: document.getElementById("threshold"),
   thresholdVal: document.getElementById("thresholdVal"),
   rescan: document.getElementById("rescanBtn"),
@@ -32,9 +33,10 @@ async function refresh() {
   }
 
   // storage settings
-  chrome.storage.local.get(["locallens_enabled", "locallens_threshold", "locallens_block"], (s) => {
+  chrome.storage.local.get(["locallens_enabled", "locallens_threshold", "locallens_block", "locallens_confpercent"], (s) => {
     if (typeof s.locallens_enabled === "boolean") els.enabled.checked = s.locallens_enabled;
     els.blockFlagged.checked = s.locallens_block === true;
+    els.showPercent.checked = s.locallens_confpercent !== false;
     if (typeof s.locallens_threshold === "number") {
       els.threshold.value = Math.round(s.locallens_threshold * 100);
       els.thresholdVal.textContent = els.threshold.value + "%";
@@ -65,6 +67,17 @@ els.blockFlagged.addEventListener("change", () => {
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     if (tabs[0] && tabs[0].id) {
       chrome.tabs.sendMessage(tabs[0].id, { type: "locallens:block", value: on }).catch(() => {});
+    }
+  });
+});
+
+els.showPercent.addEventListener("change", () => {
+  const on = els.showPercent.checked;
+  chrome.storage.local.set({ locallens_confpercent: on });
+  // push to the active page so badges re-render instantly (no reload)
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs[0] && tabs[0].id) {
+      chrome.tabs.sendMessage(tabs[0].id, { type: "locallens:confpercent", value: on }).catch(() => {});
     }
   });
 });

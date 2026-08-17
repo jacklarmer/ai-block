@@ -19,6 +19,7 @@
   let enabled = true;
   let threshold = THRESHOLD_DEFAULT;
   let blockFlagged = false; // OPT-IN: when true, hide computer-generated images entirely
+  let confPercent = true; // OPT-IN: show confidence % on the badge (default ON); ❌/✅ always shows
   let scanned = new WeakSet();
   let deferred = new Set(); // far-offscreen imgs: defer until scrolled near view
   let queue = [];
@@ -37,10 +38,11 @@
   // ---------- settings ----------
   function loadSettings() {
     try {
-      chrome.storage.local.get(["locallens_enabled", "locallens_threshold", "locallens_badge", "locallens_block"], (s) => {
+      chrome.storage.local.get(["locallens_enabled", "locallens_threshold", "locallens_badge", "locallens_block", "locallens_confpercent"], (s) => {
         enabled = s.locallens_enabled !== false;
         threshold = typeof s.locallens_threshold === "number" ? s.locallens_threshold : THRESHOLD_DEFAULT;
         blockFlagged = s.locallens_block === true;
+        confPercent = s.locallens_confpercent !== false; // default ON
         badgeStyle = s.locallens_badge || {};
         if (enabled) schedule();
       });
@@ -123,10 +125,17 @@
   function drawBadge(img, result) {
     if (document.hidden) return;
     const label = result.label;
-    const conf = Math.round(result.label === "computer-generated" ? result.fake * 100 : result.real * 100);
+    const isAI = result.label === "computer-generated";
+    const conf = Math.round(isAI ? result.fake * 100 : result.real * 100);
     // tooltip so a hover reveals the exact confidence (nice on desktop)
-    const pct = result.label === "computer-generated" ? (result.fake * 100).toFixed(1) : (result.real * 100).toFixed(1);
-    const color = result.label === "computer-generated" ? "rgba(214,40,40,0.92)" : "rgba(34,139,51,0.92)";
+    const pct = isAI ? (result.fake * 100).toFixed(1) : (result.real * 100).toFixed(1);
+    // Neutral dark pill: the ❌/✅ emoji itself carries the red/green meaning
+    // (so it's readable on the badge). Keep it compact.
+    const color = "rgba(15,15,15,0.82)";
+    // Emoji verdict: red ❌ = computer-generated, green ✅ = real. The ❌/✅ is
+    // ALWAYS shown; the confidence % is shown only if the user enables it.
+    const emoji = isAI ? "❌" : "✅";
+    const text = confPercent ? `${emoji} ${conf}%` : emoji;
 
     // Mark the image as already processed (do this early so re-collect skips it)
     try { img.setAttribute("data-locallens", label); } catch (e) {}
@@ -150,13 +159,15 @@
         "box-shadow:0 1px 3px rgba(0,0,0,0.4)",
         "max-width:200px", "overflow:hidden", "white-space:nowrap", "text-overflow:ellipsis",
       ].join(";");
-      badge.textContent = `${label} · ${conf}%`;
+      badge.textContent = text;
       badge.title = `${result.kind === "cached" ? "cached · " : ""}${label} confidence ${pct}% (fake=${(result.fake * 100).toFixed(1)}%)`;
       img.__locallensBadge = badge;
+      badge.__locallensImg = img; // for live re-render (conf-% toggle)
+      img.__locallensResult = result;
       // Append to BODY, never to the img or its parent — the img stays untouched.
       (document.body || document.documentElement).appendChild(badge);
     } else {
-      badge.textContent = `${label} · ${conf}%`;
+      badge.textContent = text;
       badge.style.background = color;
     }
 
@@ -590,6 +601,16 @@
       if (msg && msg.type === "locallens:threshold" && typeof msg.value === "number") {
         threshold = msg.value;
         if (enabled && !running) schedule();
+        sendResponse({ ok: true });
+        return false;
+      }
+      if (msg && msg.type === "locallens:confpercent" && typeof msg.value === "boolean") {
+        confPercent = msg.value;
+        // live-update every badge so the toggle applies instantly (no reload)
+        for (const b of document.querySelectorAll(".locallens-badge")) {
+          const im = b.__locallensImg;
+          if (im && im.__locallensResult) drawBadge(im, im.__locallensResult);
+        }
         sendResponse({ ok: true });
         return false;
       }
