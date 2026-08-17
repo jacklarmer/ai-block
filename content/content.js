@@ -9,11 +9,18 @@
   // safe, high-recall point that catches ~82% of unseen-generator AI images
   // versus ~78% at the old 0.65 default. User can tune via the popup slider.
   const MIN_IMG_AREA = 48 * 48; // ignore tiny icons / trackers
+  // "Actual image you're looking at" sizing (per Jack: only badge real content
+  // images — photos/artwork — never favicons, avatars, logos, thumbnails, emoji).
+  // A content image should be at least MIN_CONTENT_DIM in its shorter rendered
+  // dimension and span a meaningful pixel area. Icons/avatars/logos are small
+  // in at least one dimension and land under these.
+  const MIN_CONTENT_DIM = 100; // shorter rendered side must be >= 100px
+  const MIN_CONTENT_AREA = 100 * 100; // on-screen area >= 10,000 px^2 (~100x100)
   // Skip SMALL images entirely — profile pictures, avatars, icons, tiny
   // thumbnails. We judge "small" by RENDERED (on-screen) size, because an
   // avatar is small even if its source file is 400x400. Real photos worth
-  // classifying are almost always >= ~72px on screen in both dimensions.
-  const MIN_RENDERED = 72;
+  // classifying are almost always >= ~100px on screen in both dimensions.
+  const MIN_RENDERED = MIN_CONTENT_DIM;
   const debounceMs = 250;
 
   let enabled = true;
@@ -51,18 +58,50 @@
     }
   }
 
-  // ---------- size filtering ----------
-  // True if the image is too small (on screen) to be worth flagging. Uses the
-  // RENDERED box so avatars/icons stay clean even when their source file is big;
-  // falls back to natural size for images not yet laid out (lazy / offscreen).
+  // ---------- size / icon filtering ----------
+  // True if the image is (a) too small on-screen to be worth flagging, or
+  // (b) an obvious icon / avatar / logo / favicon / emoji we never want to
+  // badge. Per Jack: only badge actual content images (photos/artwork), never
+  // small profile pictures, thumbnails, logos, trackers. Uses the RENDERED box
+  // so avatars stay clean even when their source file is big; falls back to
+  // natural size for lazy / offscreen images not yet laid out.
+  const ICON_RE = /(^|[\/_.-])(favicon|avatar|logo|mark|emblem|emoji|icon|sprite|badge|userpic|profile|thumbnail|thumb|flag)([\/_.-]|$)/i;
   function isTooSmall(img) {
     const r = img.getBoundingClientRect();
     let w = r && r.width, h = r && r.height;
     if (!w || !h) { w = img.naturalWidth || img.width || 0; h = img.naturalHeight || img.height || 0; }
     // small in BOTH dimensions -> an avatar/icon/thumbnail; skip.
     if (w > 0 && h > 0 && w < MIN_RENDERED && h < MIN_RENDERED) return true;
+    // on-screen area too small -> a small thing we're not really "looking at".
+    if (w > 0 && h > 0 && (w * h) < MIN_CONTENT_AREA) return true;
     // intrinsic tiny image (e.g. a real 32x32 favicon)
     if ((img.naturalWidth || 0) * (img.naturalHeight || 0) < MIN_IMG_AREA) return true;
+    return false;
+  }
+  // True for images that read as icons/avatars/logos/emoji by their container
+  // or source name, regardless of render size — we never badge those.
+  function isIconic(img) {
+    // common icon/avatar containers + classes
+    let n = img;
+    for (let i = 0; i < 3 && n && n.parentElement; i++) {
+      n = n.parentElement;
+      const t = (n.tagName || "").toLowerCase();
+      const cls = (n.className && n.className.toString ? n.className.toString() : "");
+      const id = (n.id || "");
+      const rel = n.getAttribute && n.getAttribute("rel") || "";
+      if (t === "button" || t === "a" || t === "span") {
+        if (/avatar|profile|userpic|pfp/i.test(cls + " " + id + " " + rel)) return true;
+      }
+      if (t === "head" || t === "header" || t === "nav" || t === "footer") return false; // don't blanket-kill header imgs, but icons are caught above
+    }
+    // favicon / icon in <link> — the <img> itself usually won't be here, but
+    // catch src/alt signatures as a fallback.
+    const src = (img.src || "");
+    const alt = (img.alt || "");
+    const cls = (img.className && img.className.toString ? img.className.toString() : "");
+    if (ICON_RE.test(src + " / " + alt + " / " + cls)) return true;
+    // tiny emoji / spacer images
+    if (/emoji|emo|spacer|pixel|tracker|beacon|transparent/i.test(src + " " + alt)) return true;
     return false;
   }
 
@@ -89,7 +128,7 @@
       if (scanned.has(img)) continue;
       if (!img.complete && !img.src) continue;
       if (!img.src || img.src.startsWith("data:image/svg")) continue;
-      if (isTooSmall(img)) { scanned.add(img); continue; }
+      if (isTooSmall(img) || isIconic(img)) { scanned.add(img); continue; }
       // already has a badge or is our own badge
       if (img.dataset.locallens !== undefined) continue;
       out.push(img);
@@ -104,7 +143,7 @@
         for (const img of root.querySelectorAll("img")) {
           if (scanned.has(img)) continue;
           if (!img.src || img.src.startsWith("data:image/svg")) continue;
-          if (isTooSmall(img)) { scanned.add(img); continue; }
+          if (isTooSmall(img) || isIconic(img)) { scanned.add(img); continue; }
           if (img.dataset.locallens !== undefined) continue;
           out.push(img);
         }
@@ -518,6 +557,7 @@
             for (const e of entries) {
               if (!e.isIntersecting) continue;
               if (e.target && e.target.tagName === "IMG" && !scanned.has(e.target)) {
+                if (isTooSmall(e.target) || isIconic(e.target)) { scanned.add(e.target); io.unobserve(e.target); continue; }
                 enqueue(e.target);
                 hit = true;
               }
